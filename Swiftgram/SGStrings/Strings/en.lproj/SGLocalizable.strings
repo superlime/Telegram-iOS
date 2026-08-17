@@ -49,6 +49,8 @@
 /* Do not translate */
 "Settings.Translation.Backend.gtranslate" = "GTranslate";
 "Settings.Translation.Backend.system" = "System";
+/* Do not translate */
+"Settings.Translation.Backend.azure" = "Azure";
 "Settings.Translation.Backend.Notice" = "Swiftgram will fallback to %@ if selected translation service is not available.";
 
 "Settings.Transcription.Header" = "VOICE-TO-TEXT";

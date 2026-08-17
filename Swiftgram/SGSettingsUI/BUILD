@@ -19,6 +19,7 @@ swift_library(
         "//Swiftgram/SGItemListUI:SGItemListUI",
         "//Swiftgram/SGLogging:SGLogging",
         "//Swiftgram/SGSimpleSettings:SGSimpleSettings",
+        "//Swiftgram/SGAzureTranslate:SGAzureTranslate",
         "//Swiftgram/SGStrings:SGStrings",
 #        "//Swiftgram/SGAPI:SGAPI",
         "//Swiftgram/SGAPIToken:SGAPIToken",

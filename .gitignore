@@ -90,3 +90,15 @@ xcode-files
 **/node_modules/
 tools/sim-watcher/dist/
 .mcp.json
+
+# MARK: Swiftgram / Limegram local build setup
+# Azure Translator subscription key is baked in at build time. Keep it out of
+# history; copy SGAzureTranslateCredentials.swift.template into Sources/ instead.
+Swiftgram/SGAzureTranslate/Sources/SGAzureTranslateCredentials.swift
+# App Store Connect API private keys
+build-system/AuthKey_*.p8
+# Development provisioning profiles are generated per-device by
+# tools/limegram-dev-profiles.py and are not portable between machines.
+build-system/fake-codesigning-dev/
+# Scratch dir used when the bridged Linux VM cannot delete files itself
+_to_delete/

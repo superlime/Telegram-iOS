@@ -230,6 +230,7 @@ public class SGSimpleSettings {
         case `default`
         case gtranslate
         case system
+        case azure
         // Make sure to update TranslationConfiguration
     }
         
@@ -607,6 +608,19 @@ extension SGSimpleSettings {
 extension SGSimpleSettings {
     public var translationBackendEnum: SGSimpleSettings.TranslationBackend {
         return TranslationBackend(rawValue: translationBackend) ?? .default
+    }
+
+    // MARK: Swiftgram
+    // Backends that translate text on the client instead of going through
+    // Telegram's own translation API. Callers use this to decide whether the
+    // "via text" path is required regardless of Premium status.
+    public var translationBackendUsesLocalText: Bool {
+        switch self.translationBackendEnum {
+        case .gtranslate, .azure:
+            return true
+        case .default, .system:
+            return false
+        }
     }
     
     public var transcriptionBackendEnum: SGSimpleSettings.TranscriptionBackend {

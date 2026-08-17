@@ -4,7 +4,7 @@ This file provides guidance to AI assistants when working with code in this repo
 
 ## Build
 
-The app is built using Bazel via the `Make.py` wrapper. There is no selective per-module build — the only supported invocation builds the full `Telegram/Telegram` target.
+The app is built using Bazel via the `Make.py` wrapper. There is no selective per-module build — the only supported invocation builds the full `Telegram/Swiftgram` target, producing `bazel-bin/Telegram/Swiftgram.ipa`.
 
 **Command:**
 
@@ -12,22 +12,34 @@ The app is built using Bazel via the `Make.py` wrapper. There is no selective pe
 python3 build-system/Make/Make.py --overrideXcodeVersion \
  --cacheDir ~/telegram-bazel-cache \
  build \
- --configurationPath build-system/appstore-configuration.json \
- --gitCodesigningRepository git@gitlab.com:peter-iakovlev/fastlanematch.git \
- --gitCodesigningType development --gitCodesigningUseCurrent --buildNumber=1 --configuration=debug_sim_arm64
+ --configurationPath build-system/local-development-configuration.json \
+ --codesigningInformationPath build-system/fake-codesigning \
+ --buildNumber=1 --configuration=debug_sim_arm64
 ```
 
-Add `--continueOnError` after `build` (forwards to bazel's `--keep_going`) when verifying changes that may surface errors in many files at once — it lets the full set of errors land in one pass instead of stopping at the first failing target.
+**Codesigning is directory-based on this machine, not git-based.** The
+`--gitCodesigningRepository` form documented previously does not work here: there
+is no `~/.zshrc` and `TELEGRAM_CODESIGNING_GIT_PASSWORD` is not set in any shell
+init file, so the fetch fails. Real profiles are committed instead:
 
-The build needs `TELEGRAM_CODESIGNING_GIT_PASSWORD` in the environment. It is set in `~/.zshrc` but Claude Code's bash tool does NOT source shell config by default. Prefix build commands with `source ~/.zshrc 2>/dev/null;` to pick it up.
+| Path | Profiles | Use |
+| --- | --- | --- |
+| `build-system/fake-codesigning` | 9 × App Store distribution | simulator builds, TestFlight |
+| `build-system/fake-codesigning-dev` | 9 × development (device-scoped) | direct install on a tethered device |
+
+Bazel is not on `PATH`; Make.py drives `build-input/bazel-8.4.2-darwin-arm64`.
+Warm-cache timings: simulator ~10 min, `debug_arm64` ~10 min the first time then
+~15s, `release_arm64` ~18 min.
+
+Add `--continueOnError` after `build` (forwards to bazel's `--keep_going`) when verifying changes that may surface errors in many files at once — it lets the full set of errors land in one pass instead of stopping at the first failing target.
 
 **Running tests.** `Make.py test` runs Bazel test targets (same config + codesigning as `build`, forced `debug_sim_arm64`). It accepts `--target <label>` (added 2026-06-19; default `Tests/AllTests`) so a single `ios_unit_test` can run in isolation, e.g.:
 
 ```sh
-source ~/.zshrc 2>/dev/null; python3 build-system/Make/Make.py --overrideXcodeVersion --cacheDir ~/telegram-bazel-cache \
- test --configurationPath build-system/appstore-configuration.json \
- --gitCodesigningRepository git@gitlab.com:peter-iakovlev/fastlanematch.git \
- --gitCodesigningType development --gitCodesigningUseCurrent --target //submodules/TextFormat:TextFormatTests
+python3 build-system/Make/Make.py --overrideXcodeVersion --cacheDir ~/telegram-bazel-cache \
+ test --configurationPath build-system/local-development-configuration.json \
+ --codesigningInformationPath build-system/fake-codesigning \
+ --target //submodules/TextFormat:TextFormatTests
 ```
 
 The first app-side `ios_unit_test` is `//submodules/TextFormat:TextFormatTests` (the mention/date link codecs). An `ios_unit_test` here needs an `ios_test_runner` pinned to a real device/OS (e.g. `iPhone 17` / `26.5`) — the default runner picks an invalid device and the test process exits 15. **Run new targets via `--target`, not the default suite:** `Tests/AllTests` currently references a dangling `//submodules/TgVoipWebrtc:TgCallsTests`, so the default would fail to build until that suite is repaired.
@@ -38,20 +50,133 @@ The first app-side `ios_unit_test` is `//submodules/TextFormat:TextFormatTests` 
 
 ```sh
 K3=FA6F7462-AA97-42FE-9E57-8DA0593CE756   # iPhone 17 Pro K3 (use the dedicated K-sims, not the shared default)
-BUNDLE=ph.telegra.Telegraph
+BUNDLE=org.ccc38e857449d6e8.Limegram   # from build-system/local-development-configuration.json
 # Fresh build output (unzipped bundle, not the .ipa). `-L` is REQUIRED — `bazel-out` is a symlink,
 # so a plain `find bazel-out …` silently returns nothing:
-SRC="$(find -L bazel-out -maxdepth 14 -path '*/Telegram_archive-root/Payload/Telegram.app' -type d | head -1)"
+SRC="$(find -L bazel-out -maxdepth 14 -path '*ios_sim_arm64-dbg*/Swiftgram_archive-root/Payload/Swiftgram.app' -type d | head -1)"
 DEST="$(xcrun simctl get_app_container "$K3" "$BUNDLE" app)"   # installed bundle path
 # GUARD before the destructive rm: never rm the installed app unless SRC actually resolved,
 # or a failed cp leaves the sim with NO app installed (relaunch then fails).
-[ -x "$SRC/Telegram" ] || { echo "no fresh bundle at SRC=$SRC — aborting"; exit 1; }
+[ -x "$SRC/Swiftgram" ] || { echo "no fresh bundle at SRC=$SRC — aborting"; exit 1; }
 xcrun simctl terminate "$K3" "$BUNDLE" 2>/dev/null            # terminate before replacing the running binary
 rm -rf "$DEST" && cp -Rp "$SRC" "$DEST"                        # replace bundle in place; data container untouched
 xcrun simctl launch "$K3" "$BUNDLE"
 ```
 
-The sim ignores code signing, so the unsigned `Telegram_archive-root` bundle runs fine. Bazel stamps a reproducible `Jan 1 1980` mtime on the copied binary — that's expected, not a stale copy. The `Telegram_archive-root` is regenerated by the Make.py wrapper's post-build packaging; if it's stale/missing after an incremental build, unzip `Payload/Telegram.app` out of `bazel-bin/Telegram/Telegram.ipa` instead. (The older framework-only `cp` of `TelegramUIFramework` still works and is faster, but prefer the whole-`.app` copy to avoid version skew.)
+The sim ignores code signing, so the unsigned `Swiftgram_archive-root` bundle runs fine. **Constrain the find to the config directory** (`ios_sim_arm64-dbg*` above): once you have built more than one configuration, `bazel-out` holds a `Swiftgram_archive-root` per arch/config and an unfiltered `head -1` silently picks the wrong one. Bazel stamps a reproducible `Jan 1 1980` mtime on the copied binary — that's expected, not a stale copy. The `Swiftgram_archive-root` is regenerated by the Make.py wrapper's post-build packaging; if it's stale/missing after an incremental build, unzip `Payload/Swiftgram.app` out of `bazel-bin/Telegram/Swiftgram.ipa` instead. (The older framework-only `cp` of `TelegramUIFramework` still works and is faster, but prefer the whole-`.app` copy to avoid version skew.)
+
+## Device builds and TestFlight
+
+**Direct install on a tethered device.** Distribution profiles cannot be
+side-loaded (`get-task-allow=false`, no provisioned devices), so device builds
+need the development set in `build-system/fake-codesigning-dev`. Regenerate it
+with:
+
+```sh
+~/.sg-asc-venv/bin/python tools/limegram-dev-profiles.py            # auto-detect tethered device
+~/.sg-asc-venv/bin/python tools/limegram-dev-profiles.py --udid <udid> --name 'My iPhone'
+~/.sg-asc-venv/bin/python tools/limegram-dev-profiles.py --list     # read-only account dump
+```
+
+It registers the device in App Store Connect, creates an `IOS_APP_DEVELOPMENT`
+profile per Limegram bundle id, and writes them under the filenames Make.py
+expects. The `~/.sg-asc-venv` virtualenv holds its `pyjwt`/`cryptography`/
+`requests` deps (the system python3 has none of them). Modern A12+ UDIDs are
+`8hex-16hex` — **keep the hyphen**, App Store Connect rejects a stripped one.
+
+Then build and install:
+
+```sh
+python3 build-system/Make/Make.py --overrideXcodeVersion --cacheDir ~/telegram-bazel-cache \
+ build --configurationPath build-system/local-development-configuration.json \
+ --codesigningInformationPath build-system/fake-codesigning-dev \
+ --buildNumber=1 --configuration=debug_arm64
+xcrun devicectl device install app --device <udid> bazel-bin/Telegram/Swiftgram.ipa
+```
+
+**TestFlight.** Use the App Store profiles and the appstore configuration:
+
+```sh
+python3 build-system/Make/Make.py --overrideXcodeVersion --cacheDir ~/telegram-bazel-cache \
+ build --configurationPath build-system/appstore-configuration.json \
+ --codesigningInformationPath build-system/fake-codesigning \
+ --buildNumber=<unique> --configuration=release_arm64
+xcrun altool --validate-app -f bazel-bin/Telegram/Swiftgram.ipa -t ios \
+ --apiKey 343KK3A33G --apiIssuer 0a5f93a2-0d79-41d3-9904-aee08a76ed32
+xcrun altool --upload-app   -f bazel-bin/Telegram/Swiftgram.ipa -t ios \
+ --apiKey 343KK3A33G --apiIssuer 0a5f93a2-0d79-41d3-9904-aee08a76ed32
+```
+
+altool reads the key from `~/.appstoreconnect/private_keys/AuthKey_343KK3A33G.p8`
+(copy of `build-system/AuthKey_343KK3A33G.p8`). **Bump `--buildNumber` every
+upload** — Apple rejects a duplicate `CFBundleVersion` within a version. Always
+`--validate-app` first; it catches the same errors as the upload without burning
+a build number. Processing to `VALID` takes 5-15 min; the internal beta group
+"Limegram Internal" has `hasAccessToAllBuilds=true`, so a processed build needs no
+further wiring (and explicitly POSTing to that group's `relationships/builds`
+returns a harmless 422 — builds attach on their own).
+
+Note `build-system/register_app.py` carries a stale `TEAM_ID` (`C67CF9S4VU`) and a
+`PRIVATE_KEY_PATH` pointing outside this checkout. The live team is `KH29VAV74D`.
+
+### Entitlements must be a subset of what the profile grants
+
+`ProcessEntitlementsFiles` fails the build when the generated entitlements name a
+key the provisioning profile lacks — but **simulator builds skip that check
+entirely**, so an entitlement mistake stays invisible until the first
+`debug_arm64`/`release_arm64` build. When adding a capability, gate it on the
+bundle id in `Telegram/BUILD` the way `unrestricted_voip_fragment` and
+`carplay_fragment` do, rather than emitting it unconditionally; Apple grants
+things like CarPlay Messaging per-app-id and forks do not inherit them.
+
+Open follow-up: `MinimumOSVersion` is 13.0. From Spring 2027 App Store Connect
+rejects uploads below iOS 15.0 (altool warning 90068).
+
+## Translation backends
+
+Message translation routes through a user-selectable service, chosen in Swiftgram
+Settings ▸ Translation ▸ Service and stored as
+`SGSimpleSettings.TranslationBackend`:
+
+| Case | Implementation |
+| --- | --- |
+| `default` | Telegram's own translation API |
+| `gtranslate` | `Swiftgram/SGGTranslate` — scrapes `translate.google.com/m`, one request per line |
+| `system` | iOS 18+ `Translation` framework (`TranslateScreen.swift`) |
+| `azure` | `Swiftgram/SGAzureTranslate` — Azure AI Translator REST v3.0, native array batching |
+
+The selection is applied in `sgWrappedTranslateSingle` / `sgWrappedTranslateMultiple`
+(`TelegramCore/.../TelegramEngineMessages.swift`) and `sgTranslateViaText`
+(`TelegramCore/.../Translate.swift`). To add a backend: add the enum case, add a
+branch in those three functions, add a `Settings.Translation.Backend.<case>`
+string, and add the module to `submodules/TelegramCore/BUILD`'s `sgdeps`.
+
+Two things to know when debugging a backend:
+
+- **Failures fall back silently to GTranslate.** A bad credential produces
+  plausible translations from the wrong service rather than an error. To confirm
+  which service answered, translate the same text under two settings and compare
+  wording.
+- `translationBackendUsesLocalText` (in `SGSimpleSettings`) is what the chat UI
+  checks to force the client-side `viaText:` path regardless of Premium status.
+  A new client-side backend must be added to it, not just to the enum.
+
+Azure credentials are baked in at build time via
+`Swiftgram/SGAzureTranslate/Sources/SGAzureTranslateCredentials.swift`, which is
+**gitignored** — copy it from
+`Swiftgram/SGAzureTranslate/SGAzureTranslateCredentials.swift.template` on a fresh
+checkout or the module will not compile. An empty `key` disables the backend: the
+row is hidden from the picker and never selected, so a blank file still builds and
+runs.
+
+## Driving builds from an agent with no macOS shell
+
+`tools/sg-build-mcp/server.py` is a dependency-free MCP stdio server that runs
+shell commands on this Mac as detached background jobs with polling, for sessions
+whose own shell is a Linux container (e.g. Cowork running in the cloud). Register
+it in `~/Library/Application Support/Claude/claude_desktop_config.json`, then fully
+quit and reopen the app. See `tools/sg-build-mcp/README.md`; it grants arbitrary
+shell access, so remove the entry when done.
 
 ## Code Style Guidelines
 - **Naming**: PascalCase for types, camelCase for variables/methods

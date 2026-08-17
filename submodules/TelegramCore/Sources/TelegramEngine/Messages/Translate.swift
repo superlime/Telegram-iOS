@@ -1,4 +1,6 @@
 import SGGTranslate
+import SGAzureTranslate
+import SGSimpleSettings
 import SGTranslationLangFix
 
 import Foundation
@@ -484,6 +486,20 @@ private func _internal_translateMessagesByPeerId(account: Account, peerId: Engin
     }
 }
 
+// MARK: Swiftgram
+private func sgTranslateViaText(_ text: String, _ toLang: String) -> Signal<String, TranslateFetchError> {
+    if SGSimpleSettings.shared.translationBackend == SGSimpleSettings.TranslationBackend.azure.rawValue, isAzureTranslateConfigured {
+        return azureTranslate(text, toLang)
+            |> mapError { _ -> TranslateFetchError in
+                return .network
+            }
+            |> `catch` { _ -> Signal<String, TranslateFetchError> in
+                return gtranslate(text, toLang)
+            }
+    }
+    return gtranslate(text, toLang)
+}
+
 func _internal_translateMessagesViaText(account: Account, messagesDict: [EngineMessage.Id: String], fromLang: String?, toLang: String, enableLocalIfPossible: Bool, generateEntitiesFunction: @escaping (String) -> [MessageTextEntity]) -> Signal<Never, TranslationError> {
     var listOfSignals: [Signal<Void, TranslationError>] = []
     for (messageId, text) in messagesDict {
@@ -493,7 +509,7 @@ func _internal_translateMessagesViaText(account: Account, messagesDict: [EngineM
             //                guard let translatedText = result else {
             //                    return .complete()
             //                }
-            gtranslate(text, toLang)
+            sgTranslateViaText(text, toLang)
             |> mapError { _ -> TranslationError in
                 return .generic
             }

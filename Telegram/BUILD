@@ -510,7 +510,14 @@ official_carplay_fragment = """
 <key>com.apple.developer.carplay-messaging</key>
 <true/>
 """
-carplay_fragment = official_carplay_fragment # MARK: Swiftgram if telegram_bundle_id in official_bundle_ids else ""
+# MARK: Swiftgram
+# CarPlay Messaging is granted per-app-id by Apple. The official ids and
+# Swiftgram's own have it; a custom/forked bundle id generally does not, and
+# emitting the key when the provisioning profile lacks it fails
+# ProcessEntitlementsFiles on any device build (simulator builds skip the
+# check, so this only surfaces at debug_arm64/release_arm64).
+carplay_bundle_ids = official_bundle_ids + ["app.swiftgram.ios"]
+carplay_fragment = official_carplay_fragment if telegram_bundle_id in carplay_bundle_ids else ""
 
 icloud_fragment = "" if not telegram_enable_icloud else """
 <key>com.apple.developer.icloud-services</key>

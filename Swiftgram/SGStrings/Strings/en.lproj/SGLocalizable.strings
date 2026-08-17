@@ -51,6 +51,8 @@
 "Settings.Translation.Backend.system" = "System";
 /* Do not translate */
 "Settings.Translation.Backend.azure" = "Azure";
+/* Do not translate */
+"Settings.Translation.Backend.openai" = "OpenAI";
 "Settings.Translation.Compare" = "Compare services in message menu";
 "Settings.Translation.Compare.Notice" = "Adds a Compare Translations item to the message context menu that translates the message with every available service at once, so you can see which one produced what.";
 "Message.Context.CompareTranslations" = "Compare Translations";

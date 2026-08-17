@@ -2,6 +2,7 @@
 import SGLogging
 import SGSimpleSettings
 import SGAzureTranslate
+import SGOpenAITranslate
 import SGStrings
 import SGAPIToken
 
@@ -639,6 +640,9 @@ public func sgSettingsController(context: AccountContext/*, focusOnItemTag: Int?
                 for value in SGSimpleSettings.TranslationBackend.allCases {
                     if value == .azure && !isAzureTranslateConfigured {
                         continue // Azure Translator credentials were not baked into this build
+                    }
+                    if value == .openai && !isOpenAITranslateConfigured {
+                        continue // OpenAI credentials were not baked into this build
                     }
                     if value == .system {
                         if #available(iOS 18.0, *) {

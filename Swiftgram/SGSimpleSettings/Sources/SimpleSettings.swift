@@ -232,6 +232,7 @@ public class SGSimpleSettings {
         case gtranslate
         case system
         case azure
+        case openai
         // Make sure to update TranslationConfiguration
     }
         
@@ -621,7 +622,7 @@ extension SGSimpleSettings {
     // "via text" path is required regardless of Premium status.
     public var translationBackendUsesLocalText: Bool {
         switch self.translationBackendEnum {
-        case .gtranslate, .azure:
+        case .gtranslate, .azure, .openai:
             return true
         case .default, .system:
             return false

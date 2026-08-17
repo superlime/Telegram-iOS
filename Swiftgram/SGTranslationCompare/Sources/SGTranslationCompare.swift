@@ -6,6 +6,7 @@ import AccountContext
 import SGSimpleSettings
 import SGGTranslate
 import SGAzureTranslate
+import SGOpenAITranslate
 
 // MARK: Swiftgram
 //
@@ -60,6 +61,10 @@ public final class SGTranslationCompareModel: ObservableObject {
                 if !isAzureTranslateConfigured {
                     state = .skipped(reason: "no Azure key in this build")
                 }
+            case .openai:
+                if !isOpenAITranslateConfigured {
+                    state = .skipped(reason: "no OpenAI key in this build")
+                }
             case .system:
                 if #available(iOS 18.0, *) {
                 } else {
@@ -107,6 +112,8 @@ public final class SGTranslationCompareModel: ObservableObject {
                 self.startGTranslate(index: index)
             case .azure:
                 self.startAzure(index: index)
+            case .openai:
+                self.startOpenAI(index: index)
             case .system:
                 break // driven by the SwiftUI layer
             }
@@ -171,6 +178,38 @@ public final class SGTranslationCompareModel: ObservableObject {
             }
         }, error: { [weak self] _ in
             self?.update(index, .failure(reason: "network error", milliseconds: elapsedMilliseconds(since: started)))
+        })
+        self.disposables.append(disposable)
+    }
+
+    private func startOpenAI(index: Int) {
+        let started = CFAbsoluteTimeGetCurrent()
+        let signal = openAITranslate(self.sourceText, self.toLang)
+        |> deliverOnMainQueue
+        let disposable = signal.start(next: { [weak self] text in
+            guard let strongSelf = self else {
+                return
+            }
+            if text.isEmpty {
+                strongSelf.update(index, .failure(reason: "empty response", milliseconds: elapsedMilliseconds(since: started)))
+            } else {
+                strongSelf.update(index, .success(text: text, milliseconds: elapsedMilliseconds(since: started)))
+            }
+        }, error: { [weak self] error in
+            let reason: String
+            switch error {
+            case .notConfigured:
+                reason = "no credentials in this build"
+            case .network:
+                reason = "network error"
+            case let .api(statusCode, message):
+                if let message = message {
+                    reason = "HTTP \(statusCode): \(message)"
+                } else {
+                    reason = "HTTP \(statusCode)"
+                }
+            }
+            self?.update(index, .failure(reason: reason, milliseconds: elapsedMilliseconds(since: started)))
         })
         self.disposables.append(disposable)
     }

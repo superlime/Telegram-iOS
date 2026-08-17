@@ -95,6 +95,7 @@ tools/sim-watcher/dist/
 # Azure Translator subscription key is baked in at build time. Keep it out of
 # history; copy SGAzureTranslateCredentials.swift.template into Sources/ instead.
 Swiftgram/SGAzureTranslate/Sources/SGAzureTranslateCredentials.swift
+Swiftgram/SGOpenAITranslate/Sources/SGOpenAITranslateCredentials.swift
 # App Store Connect API private keys
 build-system/AuthKey_*.p8
 # Development provisioning profiles are generated per-device by

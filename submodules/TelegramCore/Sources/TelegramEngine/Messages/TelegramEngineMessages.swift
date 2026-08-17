@@ -1,5 +1,6 @@
 import SGGTranslate
 import SGAzureTranslate
+import SGOpenAITranslate
 import SGSimpleSettings
 import Foundation
 import SwiftSignalKit
@@ -2065,6 +2066,26 @@ private func sgWrappedTranslateSingle(
     toLang: String,
     `default`: Signal<(String, [MessageTextEntity])?, TranslationError>
 ) -> Signal<(String, [MessageTextEntity])?, TranslationError> {
+    if SGSimpleSettings.shared.translationBackend == SGSimpleSettings.TranslationBackend.openai.rawValue, isOpenAITranslateConfigured {
+        let openAISignal: Signal<(String, [MessageTextEntity])?, TranslationError> = openAITranslate(text, toLang)
+            |> map { translated -> (String, [MessageTextEntity])? in
+                return (translated, [])
+            }
+            |> mapError { _ -> TranslationError in
+                return .generic
+            }
+        return openAISignal
+            |> `catch` { originalError -> Signal<(String, [MessageTextEntity])?, TranslationError> in
+                return gtranslate(text, toLang)
+                    |> map { translated -> (String, [MessageTextEntity])? in
+                        return (translated, [])
+                    }
+                    |> mapError { _ -> TranslationError in
+                        return originalError
+                    }
+            }
+    }
+
     if SGSimpleSettings.shared.translationBackend == SGSimpleSettings.TranslationBackend.azure.rawValue, isAzureTranslateConfigured {
         let azureSignal: Signal<(String, [MessageTextEntity])?, TranslationError> = azureTranslate(text, toLang)
             |> map { translated -> (String, [MessageTextEntity])? in
@@ -2104,6 +2125,29 @@ private func sgWrappedTranslateMultiple(
     toLang: String,
     `default`: Signal<[(String, [MessageTextEntity])], TranslationError>
 ) -> Signal<[(String, [MessageTextEntity])], TranslationError> {
+    if SGSimpleSettings.shared.translationBackend == SGSimpleSettings.TranslationBackend.openai.rawValue, isOpenAITranslateConfigured {
+        let openAISignal: Signal<[(String, [MessageTextEntity])], TranslationError> = openAITranslateBatch(texts.map({ $0.0 }), toLang)
+            |> map { translatedTexts -> [(String, [MessageTextEntity])] in
+                return translatedTexts.map({ ($0, []) })
+            }
+            |> mapError { _ -> TranslationError in
+                return .generic
+            }
+        return openAISignal
+            |> `catch` { originalError -> Signal<[(String, [MessageTextEntity])], TranslationError> in
+                let translatedSignals: [Signal<(String, [MessageTextEntity]), TranslationError>] = texts.map { (text, _) in
+                    gtranslate(text, toLang)
+                        |> map { translated -> (String, [MessageTextEntity]) in
+                            return (translated, [])
+                        }
+                        |> mapError { _ -> TranslationError in
+                            return originalError
+                        }
+                }
+                return combineLatest(translatedSignals)
+            }
+    }
+
     if SGSimpleSettings.shared.translationBackend == SGSimpleSettings.TranslationBackend.azure.rawValue, isAzureTranslateConfigured {
         let azureSignal: Signal<[(String, [MessageTextEntity])], TranslationError> = azureTranslateBatch(texts.map({ $0.0 }), toLang)
             |> map { translatedTexts -> [(String, [MessageTextEntity])] in

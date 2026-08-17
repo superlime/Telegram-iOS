@@ -1,5 +1,6 @@
 import SGStrings
 import SGSimpleSettings
+import SGTranslationCompare
 import PeerInfoUI
 import Foundation
 import UIKit
@@ -1473,6 +1474,23 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                     })))
                 }
                 
+                // MARK: Swiftgram
+                if SGSimpleSettings.shared.contextTranslationCompare && !messageText.isEmpty {
+                    actions.append(.action(ContextMenuActionItem(text: i18n("Message.Context.CompareTranslations", chatPresentationInterfaceState.strings.baseLanguageCode), icon: { theme in
+                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Translate"), color: theme.actionSheet.primaryTextColor)
+                    }, action: { _, f in
+                        var compareToLang = chatPresentationInterfaceState.strings.baseLanguageCode
+                        if let translationState = chatPresentationInterfaceState.translationState, translationState.isEnabled {
+                            compareToLang = translationState.toLang
+                        }
+                        if let navigationController = controllerInteraction.navigationController() {
+                            let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+                            navigationController.pushViewController(sgTranslationCompareController(context: context, presentationData: presentationData, text: messageText, toLang: compareToLang))
+                        }
+                        f(.default)
+                    })))
+                }
+
                 if isSpeakSelectionEnabled() && !messageText.isEmpty {
                     actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Conversation_ContextMenuSpeak, icon: { theme in
                         return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Message"), color: theme.actionSheet.primaryTextColor)

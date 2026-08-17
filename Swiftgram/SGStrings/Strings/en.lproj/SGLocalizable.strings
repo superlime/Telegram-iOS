@@ -51,6 +51,13 @@
 "Settings.Translation.Backend.system" = "System";
 /* Do not translate */
 "Settings.Translation.Backend.azure" = "Azure";
+"Settings.Translation.Compare" = "Compare services in message menu";
+"Settings.Translation.Compare.Notice" = "Adds a Compare Translations item to the message context menu that translates the message with every available service at once, so you can see which one produced what.";
+"Message.Context.CompareTranslations" = "Compare Translations";
+"Translation.Compare.Title" = "Translation Comparison";
+"Translation.Compare.Original" = "Original";
+"Translation.Compare.TargetLanguage" = "Translating to %@";
+"Translation.Compare.Pending" = "Translating...";
 "Settings.Translation.Backend.Notice" = "Swiftgram will fallback to %@ if selected translation service is not available.";
 
 "Settings.Transcription.Header" = "VOICE-TO-TEXT";

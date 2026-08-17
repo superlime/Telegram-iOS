@@ -719,6 +719,15 @@ public extension TelegramEngine {
             return _internal_getAIComposeToneExample(network: self.account.network, tone: reference, num: num)
         }
 
+        // MARK: Swiftgram
+        // Deliberately bypasses sgWrappedTranslateSingle so a caller can address
+        // Telegram's own translation API regardless of the selected backend.
+        // Used by the translation comparison screen; normal translation should
+        // go through `translate(text:toLang:)`.
+        public func translateViaTelegram(text: String, toLang: String, entities: [MessageTextEntity] = [], tone: TranslationTone = .neutral) -> Signal<(String, [MessageTextEntity])?, TranslationError> {
+            return _internal_translate(network: self.account.network, text: text, toLang: toLang, entities: entities, tone: tone)
+        }
+
         public func translate(texts: [(String, [MessageTextEntity])], toLang: String, tone: TranslationTone = .neutral) -> Signal<[(String, [MessageTextEntity])], TranslationError> {
             return sgWrappedTranslateMultiple(texts: texts,toLang: toLang, default: _internal_translateTexts(network: self.account.network, texts: texts, toLang: toLang, tone: tone))
         }

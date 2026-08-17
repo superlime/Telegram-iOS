@@ -65,6 +65,7 @@ private enum SGBoolSetting: String {
     case disableSwipeToRecordStory
     case disableDeleteChatSwipeOption
     case quickTranslateButton
+    case contextTranslationCompare
     case hideReactions
     case showRepostToStory
     case contextShowSelectFromUser
@@ -226,6 +227,8 @@ private func SGControllerEntries(presentationData: PresentationData, callListSet
         id.increment(1)
     }
     entries.append(.toggle(id: id.count, section: .translation, settingName: .quickTranslateButton, value: SGSimpleSettings.shared.quickTranslateButton, text: i18n("Settings.Translation.QuickTranslateButton", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .translation, settingName: .contextTranslationCompare, value: SGSimpleSettings.shared.contextTranslationCompare, text: i18n("Settings.Translation.Compare", lang), enabled: true))
+    entries.append(.notice(id: id.count, section: .translation, text: i18n("Settings.Translation.Compare.Notice", lang)))
     entries.append(.disclosure(id: id.count, section: .translation, link: .languageSettings, text: strings.Localization_TranslateEntireChat))
     entries.append(.notice(id: id.count, section: .translation, text: i18n("Common.NoTelegramPremiumNeeded", lang, strings.Settings_Premium)))
 
@@ -417,6 +420,8 @@ public func sgSettingsController(context: AccountContext/*, focusOnItemTag: Int?
             SGSimpleSettings.shared.disableSwipeToRecordStory = value
         case .quickTranslateButton:
             SGSimpleSettings.shared.quickTranslateButton = value
+        case .contextTranslationCompare:
+            SGSimpleSettings.shared.contextTranslationCompare = value
         case .uploadSpeedBoost:
             SGSimpleSettings.shared.uploadSpeedBoost = value
         case .hideReactions:

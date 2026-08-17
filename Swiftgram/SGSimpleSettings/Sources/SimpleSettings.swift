@@ -124,6 +124,7 @@ public class SGSimpleSettings {
         case contextShowSaveMedia
         case contextShowMessageReplies
         case contextShowJson
+        case contextTranslationCompare
         case disableScrollToNextChannel
         case disableScrollToNextTopic
         case disableChatSwipeOptions
@@ -283,6 +284,7 @@ public class SGSimpleSettings {
         Keys.contextShowSaveMedia.rawValue: true,
         Keys.contextShowMessageReplies.rawValue: true,
         Keys.contextShowJson.rawValue: false,
+        Keys.contextTranslationCompare.rawValue: false,
         Keys.disableScrollToNextChannel.rawValue: false,
         Keys.disableScrollToNextTopic.rawValue: false,
         Keys.disableChatSwipeOptions.rawValue: false,
@@ -443,6 +445,9 @@ public class SGSimpleSettings {
     
     @UserDefault(key: Keys.contextShowJson.rawValue)
     public var contextShowJson: Bool
+
+    @UserDefault(key: Keys.contextTranslationCompare.rawValue)
+    public var contextTranslationCompare: Bool
     
     @UserDefault(key: Keys.disableScrollToNextChannel.rawValue)
     public var disableScrollToNextChannel: Bool

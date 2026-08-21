@@ -144,6 +144,7 @@ Settings ▸ Translation ▸ Service and stored as
 | `gtranslate` | `Swiftgram/SGGTranslate` — scrapes `translate.google.com/m`, one request per line |
 | `system` | iOS 18+ `Translation` framework (`TranslateScreen.swift`) |
 | `azure` | `Swiftgram/SGAzureTranslate` — Azure AI Translator REST v3.0, native array batching |
+| `openai` | `Swiftgram/SGOpenAITranslate` — OpenAI chat completions behind a translation prompt, one request per message |
 
 The selection is applied in `sgWrappedTranslateSingle` / `sgWrappedTranslateMultiple`
 (`TelegramCore/.../TelegramEngineMessages.swift`) and `sgTranslateViaText`
@@ -161,11 +162,39 @@ Two things to know when debugging a backend:
   checks to force the client-side `viaText:` path regardless of Premium status.
   A new client-side backend must be added to it, not just to the enum.
 
-Azure credentials are baked in at build time via
-`Swiftgram/SGAzureTranslate/Sources/SGAzureTranslateCredentials.swift`, which is
-**gitignored** — copy it from
-`Swiftgram/SGAzureTranslate/SGAzureTranslateCredentials.swift.template` on a fresh
-checkout or the module will not compile. An empty `key` disables the backend: the
+### The OpenAI backend is a prompt, not a translation API
+
+Two consequences worth knowing before changing it:
+
+- **One request per message, deliberately.** Asking the model for a batch in a
+  single call means trusting it to return exactly N items in order; one malformed
+  reply would scramble a whole chat. Translating a 40-message chat is 40 calls.
+- **Replies are post-processed.** Models wrap output in quotes despite being told
+  not to, so a single pair of wrapping quotes is stripped — unless the original
+  message was itself quoted.
+
+The request body is intentionally just `model` + `messages`. Newer
+reasoning-capable models reject `temperature` and renamed `max_tokens`, so
+omitting both keeps the backend working across whatever model id is configured.
+HTTP failures carry OpenAI's own `error.message` through to the comparison
+screen, which is what makes a misconfigured model self-diagnosing.
+
+**The `gpt-realtime-*` models do not work here** (verified 2026-08-18).
+`gpt-realtime-2` returns 404 *"This is not a chat model"* from
+`v1/chat/completions` and 400 *"model not found"* from `v1/responses`, even
+though its model page lists both endpoints and the account has access. Those
+models are reachable only over the realtime protocol (WebSocket/WebRTC/SIP),
+which this backend does not speak, and `gpt-realtime-translate` is
+audio-in/audio-out only so cannot translate text at all. Using one would mean
+writing a realtime WebSocket transport — that is open follow-up work, not a
+config change. The shipped default is `gpt-5.1` (1.09s on a test phrase;
+`gpt-4.1-mini` matched it at 1.10s for less money, `gpt-5-mini` was 2.44s).
+
+Azure and OpenAI credentials are baked in at build time via
+`Swiftgram/SGAzureTranslate/Sources/SGAzureTranslateCredentials.swift` and
+`Swiftgram/SGOpenAITranslate/Sources/SGOpenAITranslateCredentials.swift`, both
+**gitignored** — copy each from the `.swift.template` beside it on a fresh
+checkout or those modules will not compile. An empty `key` disables the backend: the
 row is hidden from the picker and never selected, so a blank file still builds and
 runs.
 

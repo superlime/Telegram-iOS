@@ -1,6 +1,7 @@
 import SGGTranslate
 import SGAzureTranslate
 import SGOpenAITranslate
+import SGOpenAIRealtimeTranslate
 import SGSimpleSettings
 import SGTranslationLangFix
 
@@ -489,6 +490,15 @@ private func _internal_translateMessagesByPeerId(account: Account, peerId: Engin
 
 // MARK: Swiftgram
 private func sgTranslateViaText(_ text: String, _ toLang: String) -> Signal<String, TranslateFetchError> {
+    if SGSimpleSettings.shared.translationBackend == SGSimpleSettings.TranslationBackend.openaiRealtime.rawValue, isOpenAIRealtimeTranslateConfigured {
+        return openAIRealtimeTranslate(text, toLang)
+            |> mapError { _ -> TranslateFetchError in
+                return .network
+            }
+            |> `catch` { _ -> Signal<String, TranslateFetchError> in
+                return gtranslate(text, toLang)
+            }
+    }
     if SGSimpleSettings.shared.translationBackend == SGSimpleSettings.TranslationBackend.openai.rawValue, isOpenAITranslateConfigured {
         return openAITranslate(text, toLang)
             |> mapError { _ -> TranslateFetchError in

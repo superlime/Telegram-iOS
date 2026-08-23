@@ -145,12 +145,16 @@ Settings ▸ Translation ▸ Service and stored as
 | `system` | iOS 18+ `Translation` framework (`TranslateScreen.swift`) |
 | `azure` | `Swiftgram/SGAzureTranslate` — Azure AI Translator REST v3.0, native array batching |
 | `openai` | `Swiftgram/SGOpenAITranslate` — OpenAI chat completions behind a translation prompt, one request per message |
+| `openaiRealtime` | `Swiftgram/SGOpenAIRealtimeTranslate` — `gpt-realtime-2` over the realtime WebSocket, batches sequentially down one socket |
 
 The selection is applied in `sgWrappedTranslateSingle` / `sgWrappedTranslateMultiple`
 (`TelegramCore/.../TelegramEngineMessages.swift`) and `sgTranslateViaText`
 (`TelegramCore/.../Translate.swift`). To add a backend: add the enum case, add a
 branch in those three functions, add a `Settings.Translation.Backend.<case>`
-string, and add the module to `submodules/TelegramCore/BUILD`'s `sgdeps`.
+string, and add the module to `submodules/TelegramCore/BUILD`'s `sgdeps`. Also
+add it to `SGTranslationCompareModel` and to the skip-when-unconfigured checks in
+`SGSettingsController`, or the new service is invisible in both the picker and
+the comparison screen.
 
 Two things to know when debugging a backend:
 
@@ -178,6 +182,59 @@ reasoning-capable models reject `temperature` and renamed `max_tokens`, so
 omitting both keeps the backend working across whatever model id is configured.
 HTTP failures carry OpenAI's own `error.message` through to the comparison
 screen, which is what makes a misconfigured model self-diagnosing.
+
+### The realtime backend, and why it is a separate module
+
+`gpt-realtime-2` is **not reachable over `/v1/chat/completions`** — the live API
+answers 404/400 — so it cannot be used by simply changing `model` in
+`SGOpenAITranslateCredentials`. `SGOpenAIRealtimeTranslate` talks to
+`wss://api.openai.com/v1/realtime` with `URLSessionWebSocketTask` instead. It
+reuses the same key: `SGOpenAITranslateCredentials.key` is the only secret, and
+the realtime module's own config (model, endpoint, prompt, limits) is committed
+in `SGOpenAIRealtimeTranslateConfig.swift` because it holds nothing secret.
+
+Protocol facts, all established against the live endpoint rather than the docs:
+
+- **`OpenAI-Beta: realtime=v1` is now rejected** ("The Realtime Beta API is no
+  longer supported"). `Authorization` is the only header.
+- **`session.update` must carry `session.type = "realtime"`**, or the server
+  answers `Missing required parameter: 'session.type'`.
+- Text arrives as `response.output_text.delta`, terminated by `response.done`.
+- **One response in flight per connection.** A second `response.create` before
+  `response.done` fails with `conversation_already_has_active_response`, so a
+  batch goes down one socket sequentially (~0.5s/message after a 1-3s connect).
+- **`conversation.item.delete` does not work here** (`item_delete_invalid_item_id`)
+  and desynchronises the read loop, so earlier turns cannot be pruned. Context
+  therefore grows ~20-25 input tokens per message for the life of the socket.
+  `maxMessagesPerConnection` (16) caps that; longer batches fan out over
+  parallel sockets, which is allowed and roughly halves wall-clock at 20 items.
+- **A bad key is not a failed upgrade.** The server completes the handshake and
+  then sends an `error` event with `invalid_api_key`, so it surfaces as
+  `.api(code, message)` — the `.handshake(Int)` case is a defensive fallback for
+  a genuinely refused upgrade, not the path a wrong key takes. OpenAI masks the
+  key in that message, so it is safe to show in the comparison screen.
+
+Because every user message shares one conversation, the prompt carries an
+explicit independence clause. Without it the model starts answering later
+messages in context instead of translating them — verified with a batch
+containing "What about the other one?", which translates literally rather than
+resolving the reference.
+
+**Verifying this module without the app.** The whole realtime path is plain
+Foundation + SwiftSignalKit, so it can be compiled for macOS and run against the
+live API in seconds, which is far faster than a 6-minute app build plus manual
+UI steps:
+
+```sh
+mkdir -p /tmp/h/src && cp submodules/SSignalKit/SwiftSignalKit/Source/*.swift /tmp/h/src/
+for f in Swiftgram/SGOpenAITranslate/Sources/*.swift Swiftgram/SGOpenAIRealtimeTranslate/Sources/*.swift; do
+  sed -e '/^import SwiftSignalKit$/d' -e '/^import SGOpenAITranslate$/d' \
+      -e 's/SwiftSignalKit\.Timer/H.Timer/g' "$f" > /tmp/h/src/"$(basename $f)"
+done
+# add /tmp/h/src/main.swift calling openAIRealtimeTranslateBatch(...)
+xcrun swiftc -O -module-name H -o /tmp/h/h /tmp/h/src/*.swift && /tmp/h/h
+rm -rf /tmp/h   # the copies contain the real API key — delete them
+```
 
 **The `gpt-realtime-*` models do not work here** (verified 2026-08-18).
 `gpt-realtime-2` returns 404 *"This is not a chat model"* from

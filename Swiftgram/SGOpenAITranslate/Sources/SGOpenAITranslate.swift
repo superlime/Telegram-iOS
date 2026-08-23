@@ -36,7 +36,11 @@ private let sgOpenAITranslateSession: URLSession = {
     return URLSession(configuration: configuration)
 }()
 
-private func cleanedTranslation(_ raw: String, original: String) -> String {
+// MARK: Swiftgram
+// Shared by both OpenAI backends (chat-completions and realtime): a general
+// model wraps its output in quotes even when told not to, so strip one added
+// pair. Exported rather than duplicated so the two backends cannot drift.
+public func sgStripModelQuoting(_ raw: String, original: String) -> String {
     var text: String = raw.trimmingCharacters(in: .whitespacesAndNewlines)
 
     // Strip a single pair of wrapping quotes the model added itself. Only when
@@ -126,7 +130,7 @@ public func openAITranslate(_ text: String, _ toLang: String) -> Signal<String, 
                 return
             }
 
-            let result: String = cleanedTranslation(content, original: text)
+            let result: String = sgStripModelQuoting(content, original: text)
             if result.isEmpty {
                 subscriber.putError(.network)
             } else {

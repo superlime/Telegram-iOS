@@ -15,7 +15,7 @@
 /* Example: Hide "All Chats" */
 "Settings.Folders.AllChatsHidden" = "Piilota \"%@\"";
 "Settings.Folders.RememberLast" = "Avaa viimeisin kansio";
-"Settings.Folders.RememberLast.Notice" = "Swiftgram avaa viimeksi käytetyn kansion uudelleenkäynnistyksen tai tilin vaihdon jälkeen.";
+"Settings.Folders.RememberLast.Notice" = "Limegram avaa viimeksi käytetyn kansion uudelleenkäynnistyksen tai tilin vaihdon jälkeen.";
 
 "Settings.Folders.CompactNames" = "Pienempi väli";
 "Settings.Folders.AllChatsTitle" = "\"Kaikki chatit\" otsikko";
@@ -83,7 +83,7 @@
 "Common.RestartRequired" = "Uudelleenkäynnistys vaaditaan";
 "Common.RestartNow" = "Käynnistä uudelleen nyt";
 "Common.OpenTelegram" = "Avaa Telegram";
-"Common.UseTelegramForPremium" = "Huomioi, että saat Telegram Premiumin käyttämällä virallista Telegram-sovellusta. Kun olet hankkinut Telegram Premiumin, kaikki sen ominaisuudet ovat saatavilla Swiftgramissa.";
+"Common.UseTelegramForPremium" = "Huomioi, että saat Telegram Premiumin käyttämällä virallista Telegram-sovellusta. Kun olet hankkinut Telegram Premiumin, kaikki sen ominaisuudet ovat saatavilla Limegramissa.";
 "Common.UpdateOS" = "iOS päivitys vaaditaan";
 
 "Message.HoldToShowOrReport" = "Pidä esillä näyttääksesi tai ilmoittaaksesi.";
@@ -98,7 +98,7 @@
 "ContextMenu.SelectFromUser" = "Valitse Tekijältä";
 
 "Settings.ContextMenu" = "KONTEKSTIVALIKKO";
-"Settings.ContextMenu.Notice" = "Poistetut kohteet ovat saatavilla 'Swiftgram'-alavalikossa.";
+"Settings.ContextMenu.Notice" = "Poistetut kohteet ovat saatavilla 'Limegram'-alavalikossa.";
 
 
 "Settings.ChatSwipeOptions" = "Chat List Swipe Options";
@@ -140,7 +140,7 @@
 "Settings.showChannelBottomButton" = "Kanavan ala-paneeli";
 
 "Settings.CallConfirmation" = "Puhelun vahvistus";
-"Settings.CallConfirmation.Notice" = "Swiftgram pyytää vahvistustasi ennen puhelun soittamista.";
+"Settings.CallConfirmation.Notice" = "Limegram pyytää vahvistustasi ennen puhelun soittamista.";
 
 /* Confirmation before making a Call */
 "CallConfirmation.Audio.Title" = "Soita puhelu?";
@@ -165,11 +165,11 @@
 "SessionBackup.LoggedIn" = "Sisäänkirjautuneena";
 "SessionBackup.LoggedOut" = "Uloskirjautuneena";
 "SessionBackup.DeleteAll.Title" = "Poista kaikki istunnot?";
-"SessionBackup.DeleteAll.Text" = "Kaikki istunnot poistetaan Keychainista.\n\nTilejä ei kirjaudu ulos Swiftgramista.";
+"SessionBackup.DeleteAll.Text" = "Kaikki istunnot poistetaan Keychainista.\n\nTilejä ei kirjaudu ulos Limegramista.";
 "SessionBackup.DeleteSingle.Title" = "Poista 1 (yksi) istunto?";
-"SessionBackup.DeleteSingle.Text" = "%@ istunto poistetaan Keychainista.\n\nTiliä ei kirjaudu ulos Swiftgramista.";
+"SessionBackup.DeleteSingle.Text" = "%@ istunto poistetaan Keychainista.\n\nTiliä ei kirjaudu ulos Limegramista.";
 "SessionBackup.RemoveFromApp.Title" = "Poista tili sovelluksesta?";
-"SessionBackup.RemoveFromApp.Text" = "%@ istunto POISTETAAN Swiftgramista! Istunto pysyy aktiivisena, joten voit palauttaa sen myöhemmin.";
+"SessionBackup.RemoveFromApp.Text" = "%@ istunto POISTETAAN Limegramista! Istunto pysyy aktiivisena, joten voit palauttaa sen myöhemmin.";
 "SessionBackup.Notice" = "Istunnot on salattu ja tallennettu laitteen Keychain. Istunnot eivät koskaan jätä laitettasi.\n\nTÄRKEÄÄ: Voit palauttaa istunnot uudelle laitteelle tai käyttöjärjestelmän palautuksen jälkeen sinun TÄYTYY ottaa salatut varmuuskopiot käyttöön, muuten Keychain ei siirretä.\n\nHUOMAUTUS: Istunnot voidaan silti peruuttaa Telegramin tai toisen laitteen kautta.";
 
 "MessageFilter.Title" = "Viestisuoja";

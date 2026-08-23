@@ -15,7 +15,7 @@
 /* Example: Hide "All Chats" */
 "Settings.Folders.AllChatsHidden" = "Ukryj \"%@\"";
 "Settings.Folders.RememberLast" = "Otwórz ostatni folder";
-"Settings.Folders.RememberLast.Notice" = "Swiftgram otworzy ostatnio używany folder po ponownym uruchomieniu lub zmianie konta";
+"Settings.Folders.RememberLast.Notice" = "Limegram otworzy ostatnio używany folder po ponownym uruchomieniu lub zmianie konta";
 
 "Settings.Folders.CompactNames" = "Mniejszy odstęp";
 "Settings.Folders.AllChatsTitle" = "Tytuł \"Wszystkie czaty\"";
@@ -83,7 +83,7 @@
 "Common.RestartRequired" = "Wymagany restart";
 "Common.RestartNow" = "Uruchom teraz ponownie";
 "Common.OpenTelegram" = "Otwórz Telegram";
-"Common.UseTelegramForPremium" = "Aby otrzymać Telegram Premium, musisz skorzystać z oficjalnej aplikacji Telegram. Po uzyskaniu Telegram Premium wszystkie jego funkcje staną się dostępne w Swiftgram.";
+"Common.UseTelegramForPremium" = "Aby otrzymać Telegram Premium, musisz skorzystać z oficjalnej aplikacji Telegram. Po uzyskaniu Telegram Premium wszystkie jego funkcje staną się dostępne w Limegram.";
 "Common.UpdateOS" = "Wymagana aktualizacja iOS";
 
 "Message.HoldToShowOrReport" = "Przytrzymaj, aby Pokazać lub Zgłosić.";
@@ -98,7 +98,7 @@
 "ContextMenu.SelectFromUser" = "Zaznacz od autora";
 
 "Settings.ContextMenu" = "MENU KONTEKSTOWE";
-"Settings.ContextMenu.Notice" = "Wyłączone wpisy będą dostępne w podmenu „Swiftgram”.";
+"Settings.ContextMenu.Notice" = "Wyłączone wpisy będą dostępne w podmenu „Limegram”.";
 
 
 "Settings.ChatSwipeOptions" = "Opcje przesuwania listy czatów";
@@ -142,7 +142,7 @@
 "Settings.secondsInMessages" = "Sekundy w wiadomościach";
 
 "Settings.CallConfirmation" = "Potwierdzenie połączenia";
-"Settings.CallConfirmation.Notice" = "Swiftgram poprosi o twoje potwierdzenie przed wykonaniem połączenia.";
+"Settings.CallConfirmation.Notice" = "Limegram poprosi o twoje potwierdzenie przed wykonaniem połączenia.";
 
 /* Confirmation before making a Call */
 "CallConfirmation.Audio.Title" = "Wykonać połączenie?";
@@ -167,11 +167,11 @@
 "SessionBackup.LoggedIn" = "Zalogowano";
 "SessionBackup.LoggedOut" = "Wylogowano";
 "SessionBackup.DeleteAll.Title" = "Usunąć wszystkie sesje?";
-"SessionBackup.DeleteAll.Text" = "Wszystkie sesje zostaną usunięte z pęku kluczy.\n\nKonta nie zostaną wylogowane ze Swiftgram.";
+"SessionBackup.DeleteAll.Text" = "Wszystkie sesje zostaną usunięte z pęku kluczy.\n\nKonta nie zostaną wylogowane ze Limegram.";
 "SessionBackup.DeleteSingle.Title" = "Usunąć 1 (jedną) sesję?";
-"SessionBackup.DeleteSingle.Text" = "%@ sesja zostanie usunięta z pęku kluczy.\n\nKonto nie zostanie wylogowane ze Swiftgram.";
+"SessionBackup.DeleteSingle.Text" = "%@ sesja zostanie usunięta z pęku kluczy.\n\nKonto nie zostanie wylogowane ze Limegram.";
 "SessionBackup.RemoveFromApp.Title" = "Usunąć konto z aplikacji?";
-"SessionBackup.RemoveFromApp.Text" = "%@ sesja ZOSTANIE USUNIĘTA ze Swiftgram! Sesja pozostanie aktywna, więc możesz ją później przywrócić.";
+"SessionBackup.RemoveFromApp.Text" = "%@ sesja ZOSTANIE USUNIĘTA ze Limegram! Sesja pozostanie aktywna, więc możesz ją później przywrócić.";
 "SessionBackup.Notice" = "Sesje są szyfrowane i przechowywane w pęku kluczy urządzenia. Sesje nigdy nie opuszczają urządzenia.\n\nWAŻNE: Aby przywrócić sesje na nowym urządzeniu lub po zresetowaniu systemu operacyjnego, MUSISZ włączyć szyfrowane kopie zapasowe, w przeciwnym razie pęk kluczy nie zostanie przeniesiony.\n\nUWAGA: Sesje mogą zostać unieważnione przez Telegram lub z innego urządzenia.";
 
 "MessageFilter.Title" = "Filtr wiadomości";

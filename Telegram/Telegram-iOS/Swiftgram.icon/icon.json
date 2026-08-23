@@ -1,70 +1,70 @@
 {
-  "fill" : {
-    "linear-gradient" : [
-      "display-p3:0.96863,0.53333,0.29020,1.00000",
-      "srgb:0.92941,0.21961,0.11765,1.00000"
+  "fill": {
+    "linear-gradient": [
+      "srgb:0.60784,0.87843,0.31373,1.00000",
+      "srgb:0.27451,0.65098,0.14902,1.00000"
     ],
-    "orientation" : {
-      "start" : {
-        "x" : 0.5,
-        "y" : 0
+    "orientation": {
+      "start": {
+        "x": 0.5,
+        "y": 0
       },
-      "stop" : {
-        "x" : 0.5,
-        "y" : 0.7
+      "stop": {
+        "x": 0.5,
+        "y": 0.7
       }
     }
   },
-  "groups" : [
+  "groups": [
     {
-      "layers" : [
+      "layers": [
         {
-          "blend-mode-specializations" : [
+          "blend-mode-specializations": [
             {
-              "value" : "normal"
+              "value": "normal"
             },
             {
-              "appearance" : "dark",
-              "value" : "normal"
+              "appearance": "dark",
+              "value": "normal"
             }
           ],
-          "fill-specializations" : [
+          "fill-specializations": [
             {
-              "value" : "automatic"
+              "value": "automatic"
             },
             {
-              "appearance" : "dark",
-              "value" : "none"
+              "appearance": "dark",
+              "value": "none"
             }
           ],
-          "glass" : true,
-          "image-name" : "Default@3x 2.svg",
-          "name" : "Default@3x 2",
-          "opacity-specializations" : [
+          "glass": true,
+          "image-name": "Default@3x 2.svg",
+          "name": "Default@3x 2",
+          "opacity-specializations": [
             {
-              "value" : 1
+              "value": 1
             },
             {
-              "appearance" : "dark",
-              "value" : 0.9
+              "appearance": "dark",
+              "value": 0.9
             }
           ]
         }
       ],
-      "shadow" : {
-        "kind" : "neutral",
-        "opacity" : 0.5
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
       },
-      "translucency" : {
-        "enabled" : true,
-        "value" : 0.5
+      "translucency": {
+        "enabled": true,
+        "value": 0.5
       }
     }
   ],
-  "supported-platforms" : {
-    "circles" : [
+  "supported-platforms": {
+    "circles": [
       "watchOS"
     ],
-    "squares" : "shared"
+    "squares": "shared"
   }
 }

@@ -15,7 +15,7 @@
 /* Example: Hide "All Chats" */
 "Settings.Folders.AllChatsHidden" = "Versteek \"%@\"";
 "Settings.Folders.RememberLast" = "Maak laaste lêer oop";
-"Settings.Folders.RememberLast.Notice" = "Swiftgram sal die laaste gebruikte lêer oopmaak na herbegin of rekeningwissel.";
+"Settings.Folders.RememberLast.Notice" = "Limegram sal die laaste gebruikte lêer oopmaak na herbegin of rekeningwissel.";
 
 "Settings.Folders.CompactNames" = "Kleiner spasie";
 "Settings.Folders.AllChatsTitle" = "\"Alle Chats\" titel";
@@ -83,7 +83,7 @@
 "Common.RestartRequired" = "Herbegin benodig";
 "Common.RestartNow" = "Herbegin Nou";
 "Common.OpenTelegram" = "Maak Telegram oop";
-"Common.UseTelegramForPremium" = "Let daarop dat om Telegram Premium te kry, moet jy die amptelike Telegram-app gebruik. Nadat jy Telegram Premium verkry het, sal al sy funksies beskikbaar word in Swiftgram.";
+"Common.UseTelegramForPremium" = "Let daarop dat om Telegram Premium te kry, moet jy die amptelike Telegram-app gebruik. Nadat jy Telegram Premium verkry het, sal al sy funksies beskikbaar word in Limegram.";
 
 "Message.HoldToShowOrReport" = "Hou vas om te Wys of te Rapporteer.";
 
@@ -97,7 +97,7 @@
 "ContextMenu.SelectFromUser" = "Kies vanaf Outeur";
 
 "Settings.ContextMenu" = "KONTEKSMENU";
-"Settings.ContextMenu.Notice" = "Gedeaktiveerde inskrywings sal beskikbaar wees in die \"Swiftgram\" sub-menu.";
+"Settings.ContextMenu.Notice" = "Gedeaktiveerde inskrywings sal beskikbaar wees in die \"Limegram\" sub-menu.";
 
 
 "Settings.ChatSwipeOptions" = "Chat List Swipe Options";
@@ -138,7 +138,7 @@
 "Settings.hideChannelBottomButton" = "Verberg Kanaal Onderpaneel";
 
 "Settings.CallConfirmation" = "Bel Bevestiging";
-"Settings.CallConfirmation.Notice" = "Swiftgram sal om jou bevestiging vra voordat 'n oproep gemaak word.";
+"Settings.CallConfirmation.Notice" = "Limegram sal om jou bevestiging vra voordat 'n oproep gemaak word.";
 
 /* Confirmation before making a Call */
 "CallConfirmation.Audio.Title" = "Maak 'n Oproep?";

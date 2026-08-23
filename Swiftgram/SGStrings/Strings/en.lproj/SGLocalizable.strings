@@ -18,7 +18,7 @@
 /* Example: Hide "All Chats" */
 "Settings.Folders.AllChatsHidden" = "Hide \"%@\"";
 "Settings.Folders.RememberLast" = "Open Last Folder";
-"Settings.Folders.RememberLast.Notice" = "Swiftgram will open the last used folder when you restart the app or switch accounts.";
+"Settings.Folders.RememberLast.Notice" = "Limegram will open the last used folder when you restart the app or switch accounts.";
 
 "Settings.Folders.CompactNames" = "Smaller spacing";
 "Settings.Folders.AllChatsTitle" = "\"All Chats\" title";
@@ -60,7 +60,7 @@
 "Translation.Compare.Original" = "Original";
 "Translation.Compare.TargetLanguage" = "Translating to %@";
 "Translation.Compare.Pending" = "Translating...";
-"Settings.Translation.Backend.Notice" = "Swiftgram will fallback to %@ if selected translation service is not available.";
+"Settings.Translation.Backend.Notice" = "Limegram will fallback to %@ if selected translation service is not available.";
 
 "Settings.Transcription.Header" = "VOICE-TO-TEXT";
 "Settings.Transcription.Backend" = "Service";
@@ -68,7 +68,7 @@
 "Settings.Transcription.Backend.default" = "Telegram";
 /* Do not translate */
 "Settings.Transcription.Backend.apple" = "Apple";
-"Settings.Transcription.Backend.Notice" = "Swiftgram will fallback to %@ if selected transcription service is not available.";
+"Settings.Transcription.Backend.Notice" = "Limegram will fallback to %@ if selected transcription service is not available.";
 
 "Stories.Warning.Author" = "Author";
 "Stories.Warning.ViewStory" = "View Story?";
@@ -117,7 +117,7 @@
 "Common.RestartRequired" = "Restart required";
 "Common.RestartNow" = "Restart Now";
 "Common.OpenTelegram" = "Open Telegram";
-"Common.UseTelegramForPremium" = "Please note that to get Telegram Premium, you must use the official Telegram app. Once you have obtained Telegram Premium, all its features will become available in Swiftgram.";
+"Common.UseTelegramForPremium" = "Please note that to get Telegram Premium, you must use the official Telegram app. Once you have obtained Telegram Premium, all its features will become available in Limegram.";
 "Common.UpdateOS" = "iOS update required";
 "Common.KnowWhatYouDo" = "Please, change these settings only if you know what they do.";
 
@@ -133,7 +133,7 @@
 "ContextMenu.SelectFromUser" = "Select from Author";
 
 "Settings.ContextMenu" = "CONTEXT MENU";
-"Settings.ContextMenu.Notice" = "Disabled entries will be available in \"Swiftgram\" sub-menu.";
+"Settings.ContextMenu.Notice" = "Disabled entries will be available in \"Limegram\" sub-menu.";
 
 
 "Settings.ChatSwipeOptions" = "Chat List Swipe Options";
@@ -177,7 +177,7 @@
 "Settings.secondsInMessages" = "Seconds in Messages";
 
 "Settings.CallConfirmation" = "Call Confirmation";
-"Settings.CallConfirmation.Notice" = "Swiftgram will ask for your confirmation before making a call.";
+"Settings.CallConfirmation.Notice" = "Limegram will ask for your confirmation before making a call.";
 
 /* Confirmation before making a Call */
 "CallConfirmation.Audio.Title" = "Make a Call?";
@@ -202,11 +202,11 @@
 "SessionBackup.LoggedIn" = "Logged In";
 "SessionBackup.LoggedOut" = "Logged Out";
 "SessionBackup.DeleteAll.Title" = "Delete All Sessions?";
-"SessionBackup.DeleteAll.Text" = "All sessions will be removed from Keychain.\n\nAccounts will not be logged out from Swiftgram.";
+"SessionBackup.DeleteAll.Text" = "All sessions will be removed from Keychain.\n\nAccounts will not be logged out from Limegram.";
 "SessionBackup.DeleteSingle.Title" = "Delete 1 (one) Session?";
-"SessionBackup.DeleteSingle.Text" = "%@ session will be removed from Keychain.\n\nAccount will not be logged out from Swiftgram.";
+"SessionBackup.DeleteSingle.Text" = "%@ session will be removed from Keychain.\n\nAccount will not be logged out from Limegram.";
 "SessionBackup.RemoveFromApp.Title" = "Remove account from App?";
-"SessionBackup.RemoveFromApp.Text" = "%@ session WILL BE REMOVED from Swiftgram! Session will remain active, so you can restore it later.";
+"SessionBackup.RemoveFromApp.Text" = "%@ session WILL BE REMOVED from Limegram! Session will remain active, so you can restore it later.";
 "SessionBackup.Notice" = "Sessions are encrypted and stored in the device Keychain. Sessions never leave your device.\n\nIMPORTANT: To restore sessions on a new device or after an OS reset, you MUST enable encrypted backups, otherwise Keychain won't be transfered.\n\nNOTE: Sessions may still be revoked by Telegram or from another device.";
 
 "MessageFilter.Title" = "Message Filter";

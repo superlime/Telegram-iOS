@@ -15,7 +15,7 @@
 /* Example: Hide "All Chats" */
 "Settings.Folders.AllChatsHidden" = "Nascondi \"%@\"";
 "Settings.Folders.RememberLast" = "Apri l'ultima cartella";
-"Settings.Folders.RememberLast.Notice" = "Swiftgram aprirà l'ultima cartella utilizzata dopo il riavvio o il cambio account";
+"Settings.Folders.RememberLast.Notice" = "Limegram aprirà l'ultima cartella utilizzata dopo il riavvio o il cambio account";
 
 "Settings.Folders.CompactNames" = "Spaziatura minore";
 "Settings.Folders.AllChatsTitle" = "Titolo \"Tutte le chat\"";
@@ -83,7 +83,7 @@
 "Common.RestartRequired" = "Riavvio richiesto";
 "Common.RestartNow" = "Riavvia Adesso";
 "Common.OpenTelegram" = "Apri Telegram";
-"Common.UseTelegramForPremium" = "Si prega di notare che per ottenere Telegram Premium, è necessario utilizzare l'app ufficiale Telegram. Una volta ottenuto Telegram Premium, tutte le sue funzionalità saranno disponibili su Swiftgram.";
+"Common.UseTelegramForPremium" = "Si prega di notare che per ottenere Telegram Premium, è necessario utilizzare l'app ufficiale Telegram. Una volta ottenuto Telegram Premium, tutte le sue funzionalità saranno disponibili su Limegram.";
 
 "Message.HoldToShowOrReport" = "Tieni premuto per mostrare o segnalare.";
 
@@ -97,7 +97,7 @@
 "ContextMenu.SelectFromUser" = "Seleziona dall'autore";
 
 "Settings.ContextMenu" = "MENU CONTESTUALE";
-"Settings.ContextMenu.Notice" = "Le voci disabilitate saranno disponibili nel sottomenu \"Swiftgram\".";
+"Settings.ContextMenu.Notice" = "Le voci disabilitate saranno disponibili nel sottomenu \"Limegram\".";
 
 
 "Settings.ChatSwipeOptions" = "Opzioni scorrimento nella lista delle chat";
@@ -138,7 +138,7 @@
 "Settings.hideChannelBottomButton" = "Nascondi Pannello Inferiore del Canale";
 
 "Settings.CallConfirmation" = "Conferma di chiamata";
-"Settings.CallConfirmation.Notice" = "Swiftgram chiederà la tua conferma prima di effettuare una chiamata.";
+"Settings.CallConfirmation.Notice" = "Limegram chiederà la tua conferma prima di effettuare una chiamata.";
 
 /* Confirmation before making a Call */
 "CallConfirmation.Audio.Title" = "Effettuare una chiamata?";

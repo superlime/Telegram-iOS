@@ -15,7 +15,7 @@
 /* Example: Hide "All Chats" */
 "Settings.Folders.AllChatsHidden" = "\"%@\"を非表示";
 "Settings.Folders.RememberLast" = "最後に開いたフォルダを開く";
-"Settings.Folders.RememberLast.Notice" = "Swiftgramは再起動またはアカウント切替後に最後に使用したフォルダを開きます";
+"Settings.Folders.RememberLast.Notice" = "Limegramは再起動またはアカウント切替後に最後に使用したフォルダを開きます";
 
 "Settings.Folders.CompactNames" = "より小さい間隔";
 "Settings.Folders.AllChatsTitle" = "「すべてのチャット」タイトル";
@@ -99,7 +99,7 @@
 "ContextMenu.SelectFromUser" = "全て選択";
 
 "Settings.ContextMenu" = "コンテキスト メニュー";
-"Settings.ContextMenu.Notice" = "無効化されたエントリは、「Swiftgram」サブメニューから利用できます。";
+"Settings.ContextMenu.Notice" = "無効化されたエントリは、「Limegram」サブメニューから利用できます。";
 
 
 "Settings.ChatSwipeOptions" = "チャットリストのスワイプ設定";
@@ -143,7 +143,7 @@
 "Settings.secondsInMessages" = "メッセージ内の秒数";
 
 "Settings.CallConfirmation" = "コール確認";
-"Settings.CallConfirmation.Notice" = "Swiftgram は、通話を行う前にあなたの確認を求めます。";
+"Settings.CallConfirmation.Notice" = "Limegram は、通話を行う前にあなたの確認を求めます。";
 
 /* Confirmation before making a Call */
 "CallConfirmation.Audio.Title" = "通話をかけますか？";
@@ -168,11 +168,11 @@
 "SessionBackup.LoggedIn" = "ログイン中";
 "SessionBackup.LoggedOut" = "ログアウトしました";
 "SessionBackup.DeleteAll.Title" = "すべてのセッションを削除しますか？";
-"SessionBackup.DeleteAll.Text" = "すべてのセッションがキーチェーンから削除されます。\n\nアカウントはSwiftgramからログアウトされません。";
+"SessionBackup.DeleteAll.Text" = "すべてのセッションがキーチェーンから削除されます。\n\nアカウントはLimegramからログアウトされません。";
 "SessionBackup.DeleteSingle.Title" = "1つのセッションを削除しますか？";
-"SessionBackup.DeleteSingle.Text" = "%@のセッションがキーチェーンから削除されます。\n\nアカウントはSwiftgramからログアウトされません。";
+"SessionBackup.DeleteSingle.Text" = "%@のセッションがキーチェーンから削除されます。\n\nアカウントはLimegramからログアウトされません。";
 "SessionBackup.RemoveFromApp.Title" = "アプリからアカウントを削除しますか？";
-"SessionBackup.RemoveFromApp.Text" = "%@のセッションがSwiftgramから削除されます！セッションはアクティブなままなので、後で復元できます。";
+"SessionBackup.RemoveFromApp.Text" = "%@のセッションがLimegramから削除されます！セッションはアクティブなままなので、後で復元できます。";
 "SessionBackup.Notice" = "セッションは暗号化され、デバイスのキーチェーンに保存されます。セッションはあなたのデバイスを離れることはありません。\n\n重要: 新しいデバイスまたはOSのリセット後にセッションを復元するには、暗号化されたバックアップを有効にする必要があります。さもなければキーチェーンは移行されません。\n\n注意: セッションはTelegramや他のデバイスからも取り消される可能性があります。";
 
 "MessageFilter.Title" = "メッセージフィルター";

@@ -15,7 +15,7 @@
 /* Example: Hide "All Chats" */
 "Settings.Folders.AllChatsHidden" = "Sembunyikan \"%@\"";
 "Settings.Folders.RememberLast" = "Buka folder terakhir";
-"Settings.Folders.RememberLast.Notice" = "Swiftgram akan membuka folder yang terakhir digunakan setelah restart atau pergantian akun";
+"Settings.Folders.RememberLast.Notice" = "Limegram akan membuka folder yang terakhir digunakan setelah restart atau pergantian akun";
 
 "Settings.Folders.CompactNames" = "Pemisahan yang Lebih Kecil";
 "Settings.Folders.AllChatsTitle" = "Judul \"Semua Obrolan\"";
@@ -83,7 +83,7 @@
 "Common.RestartRequired" = "Diperlukan restart";
 "Common.RestartNow" = "Restart Sekarang";
 "Common.OpenTelegram" = "Buka Telegram";
-"Common.UseTelegramForPremium" = "Harap dicatat bahwa untuk mendapatkan Telegram Premium, Anda harus menggunakan aplikasi Telegram resmi. Setelah Anda mendapatkan Telegram Premium, semua fiturnya akan tersedia di Swiftgram.";
+"Common.UseTelegramForPremium" = "Harap dicatat bahwa untuk mendapatkan Telegram Premium, Anda harus menggunakan aplikasi Telegram resmi. Setelah Anda mendapatkan Telegram Premium, semua fiturnya akan tersedia di Limegram.";
 
 "Message.HoldToShowOrReport" = "Tahan untuk Menampilkan atau Melaporkan.";
 
@@ -97,7 +97,7 @@
 "ContextMenu.SelectFromUser" = "Pilih dari Penulis";
 
 "Settings.ContextMenu" = "MENU KONTEKS";
-"Settings.ContextMenu.Notice" = "Entri yang dinonaktifkan akan tersedia di sub-menu \"Swiftgram\".";
+"Settings.ContextMenu.Notice" = "Entri yang dinonaktifkan akan tersedia di sub-menu \"Limegram\".";
 
 
 "Settings.ChatSwipeOptions" = "Opsi gesek daftar obrolan";
@@ -138,7 +138,7 @@
 "Settings.hideChannelBottomButton" = "Sembunyikan Panel Bawah Saluran";
 
 "Settings.CallConfirmation" = "Konfirmasi Panggilan";
-"Settings.CallConfirmation.Notice" = "Swiftgram akan meminta konfirmasi Anda sebelum melakukan panggilan.";
+"Settings.CallConfirmation.Notice" = "Limegram akan meminta konfirmasi Anda sebelum melakukan panggilan.";
 
 /* Confirmation before making a Call */
 "CallConfirmation.Audio.Title" = "Buat Panggilan?";

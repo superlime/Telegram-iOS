@@ -97,7 +97,7 @@
 "ContextMenu.SelectFromUser" = "Изабери од аутора";
 
 "Settings.ContextMenu" = "КОНТЕКСТ МЕНИ";
-"Settings.ContextMenu.Notice" = "Онемогућени уноси ће бити доступни у 'Swiftgram' подменују.";
+"Settings.ContextMenu.Notice" = "Онемогућени уноси ће бити доступни у 'Limegram' подменују.";
 
 
 "Settings.ChatSwipeOptions" = "Опције превлачења списка разговора";
@@ -138,7 +138,7 @@
 "Settings.hideChannelBottomButton" = "Сакриј донји панел канала";
 
 "Settings.CallConfirmation" = "Потврда позива";
-"Settings.CallConfirmation.Notice" = "Swiftgram ће затражити вашу потврду пре него што направи позив.";
+"Settings.CallConfirmation.Notice" = "Limegram ће затражити вашу потврду пре него што направи позив.";
 
 /* Confirmation before making a Call */
 "CallConfirmation.Audio.Title" = "Направити позив?";

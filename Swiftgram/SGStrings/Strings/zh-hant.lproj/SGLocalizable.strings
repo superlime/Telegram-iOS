@@ -15,7 +15,7 @@
 /* Example: Hide "All Chats" */
 "Settings.Folders.AllChatsHidden" = "隱藏 \"%@\"";
 "Settings.Folders.RememberLast" = "開啟最後瀏覽的對話盒";
-"Settings.Folders.RememberLast.Notice" = "Swiftgram 會在重啟或帳號切換後開啟最後瀏覽的對話盒";
+"Settings.Folders.RememberLast.Notice" = "Limegram 會在重啟或帳號切換後開啟最後瀏覽的對話盒";
 
 "Settings.Folders.CompactNames" = "縮小間距";
 "Settings.Folders.AllChatsTitle" = "\"所有對話\"標題";
@@ -87,7 +87,7 @@
 "Common.RestartRequired" = "需要重新啟動";
 "Common.RestartNow" = "立即重啟";
 "Common.OpenTelegram" = "開啟 Telegram";
-"Common.UseTelegramForPremium" = "要獲得 Telegram Premium，您必須使用官方 Telegram App。一旦您擁有 Telegram Premium，其所有功能都將在 Swiftgram 中可用。";
+"Common.UseTelegramForPremium" = "要獲得 Telegram Premium，您必須使用官方 Telegram App。一旦您擁有 Telegram Premium，其所有功能都將在 Limegram 中可用。";
 "Common.UpdateOS" = "需要 iOS 更新";
 
 "Message.HoldToShowOrReport" = "按住以顯示訊息或報告";
@@ -102,7 +102,7 @@
 "ContextMenu.SelectFromUser" = "選取此人的所有訊息";
 
 "Settings.ContextMenu" = "內容選單";
-"Settings.ContextMenu.Notice" = "停用的選項可在 Swiftgram 選單中使用";
+"Settings.ContextMenu.Notice" = "停用的選項可在 Limegram 選單中使用";
 
 
 "Settings.ChatSwipeOptions" = "對話列表滑動選項";
@@ -146,7 +146,7 @@
 "Settings.secondsInMessages" = "消息中的秒數";
 
 "Settings.CallConfirmation" = "撥號確認";
-"Settings.CallConfirmation.Notice" = "Swiftgram 在撥打電話之前會要求您確認。";
+"Settings.CallConfirmation.Notice" = "Limegram 在撥打電話之前會要求您確認。";
 
 /* Confirmation before making a Call */
 "CallConfirmation.Audio.Title" = "打電話？";
@@ -171,11 +171,11 @@
 "SessionBackup.LoggedIn" = "已登錄";
 "SessionBackup.LoggedOut" = "已登出";
 "SessionBackup.DeleteAll.Title" = "刪除所有會話？";
-"SessionBackup.DeleteAll.Text" = "所有會話將從鑰匙串中移除。\n\n帳戶將不會從 Swiftgram 登出。";
+"SessionBackup.DeleteAll.Text" = "所有會話將從鑰匙串中移除。\n\n帳戶將不會從 Limegram 登出。";
 "SessionBackup.DeleteSingle.Title" = "刪除 1 (一) 會話？";
-"SessionBackup.DeleteSingle.Text" = "%@ 會話將從鑰匙串中移除。\n\n帳戶將不會從 Swiftgram 登出。";
+"SessionBackup.DeleteSingle.Text" = "%@ 會話將從鑰匙串中移除。\n\n帳戶將不會從 Limegram 登出。";
 "SessionBackup.RemoveFromApp.Title" = "從應用中移除帳戶？";
-"SessionBackup.RemoveFromApp.Text" = "%@ 會話將從 Swiftgram 中移除！會話將保持活躍，以便您稍後恢復。";
+"SessionBackup.RemoveFromApp.Text" = "%@ 會話將從 Limegram 中移除！會話將保持活躍，以便您稍後恢復。";
 "SessionBackup.Notice" = "會話會被加密並儲存在設備的鑰匙圈中。會話從不離開您的設備。\n\n重要提示：要在新設備上或在操作系統重置後恢復會話，您必須啟用加密備份，否則鑰匙圈將無法轉移。\n\n注意：會話仍然可能被 Telegram 或其他設備撤銷。";
 
 "MessageFilter.Title" = "訊息過濾器";

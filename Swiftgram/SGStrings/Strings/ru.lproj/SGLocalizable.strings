@@ -18,7 +18,7 @@
 /* Example: Hide "All Chats" */
 "Settings.Folders.AllChatsHidden" = "Скрыть \"%@\"";
 "Settings.Folders.RememberLast" = "Открывать последнюю папку";
-"Settings.Folders.RememberLast.Notice" = "Swiftgram откроет последнюю использованную папку после перезапуска или переключения учетной записи";
+"Settings.Folders.RememberLast.Notice" = "Limegram откроет последнюю использованную папку после перезапуска или переключения учетной записи";
 
 "Settings.Folders.CompactNames" = "Уменьшенные расстояния";
 "Settings.Folders.AllChatsTitle" = "Название \"Все чаты\"";
@@ -44,7 +44,7 @@
 /* Do not translate */
 "Settings.Translation.Backend.gtranslate" = "GTranslate";
 "Settings.Translation.Backend.system" = "Система";
-"Settings.Translation.Backend.Notice" = "Swiftgram будет использовать %@, если выбранный сервис перевода недоступен.";
+"Settings.Translation.Backend.Notice" = "Limegram будет использовать %@, если выбранный сервис перевода недоступен.";
 
 "Settings.Transcription.Header" = "ГОЛОС В ТЕКСТ";
 "Settings.Transcription.Backend" = "Сервис";
@@ -52,7 +52,7 @@
 "Settings.Transcription.Backend.default" = "Telegram";
 /* Do not translate */
 "Settings.Transcription.Backend.apple" = "Apple";
-"Settings.Transcription.Backend.Notice" = "Swiftgram будет использовать %@, если выбранный сервис транскрипции недоступен.";
+"Settings.Transcription.Backend.Notice" = "Limegram будет использовать %@, если выбранный сервис транскрипции недоступен.";
 
 "Stories.Warning.Author" = "Автор";
 "Stories.Warning.ViewStory" = "Просмотреть историю?";
@@ -101,7 +101,7 @@
 "Common.RestartRequired" = "Необходим перезапуск";
 "Common.RestartNow" = "Перезапустить Сейчас";
 "Common.OpenTelegram" = "Открыть Telegram";
-"Common.UseTelegramForPremium" = "Обратите внимание, что для получения Telegram Premium, вы должны использовать официальное приложение Telegram. Как только вы получите Telegram Premium, все его функции станут доступны в Swiftgram.";
+"Common.UseTelegramForPremium" = "Обратите внимание, что для получения Telegram Premium, вы должны использовать официальное приложение Telegram. Как только вы получите Telegram Premium, все его функции станут доступны в Limegram.";
 "Common.UpdateOS" = "Требуется обновление iOS";
 "Common.KnowWhatYouDo" = "Пожалуйста, меняйте эти настройки только если вы знаете, что они делают.";
 
@@ -117,7 +117,7 @@
 "ContextMenu.SelectFromUser" = "Выбрать от Автора";
 
 "Settings.ContextMenu" = "КОНТЕКСТНОЕ МЕНЮ";
-"Settings.ContextMenu.Notice" = "Выключенные пункты будут доступны в подменю «Swiftgram».";
+"Settings.ContextMenu.Notice" = "Выключенные пункты будут доступны в подменю «Limegram».";
 
 
 "Settings.ChatSwipeOptions" = "Опции чатов при свайпе";
@@ -161,7 +161,7 @@
 "Settings.secondsInMessages" = "Секунды в Сообщениях";
 
 "Settings.CallConfirmation" = "Подтверждение вызова";
-"Settings.CallConfirmation.Notice" = "Swiftgram запросит подтверждение перед совершением звонка.";
+"Settings.CallConfirmation.Notice" = "Limegram запросит подтверждение перед совершением звонка.";
 
 /* Confirmation before making a Call */
 "CallConfirmation.Audio.Title" = "Позвонить?";
@@ -186,11 +186,11 @@
 "SessionBackup.LoggedIn" = "Залогинен";
 "SessionBackup.LoggedOut" = "Разлогинен";
 "SessionBackup.DeleteAll.Title" = "Удалить все сессии?";
-"SessionBackup.DeleteAll.Text" = "Все сессии будут удалены из Keychain.\n\nАккаунты не будут разлогинены из Swiftgram.";
+"SessionBackup.DeleteAll.Text" = "Все сессии будут удалены из Keychain.\n\nАккаунты не будут разлогинены из Limegram.";
 "SessionBackup.DeleteSingle.Title" = "Удалить 1 (одну) сессию?";
-"SessionBackup.DeleteSingle.Text" = "%@ сессия будет удалена из Keychain.\n\nАккаунт не будет разлогинен из Swiftgram.";
+"SessionBackup.DeleteSingle.Text" = "%@ сессия будет удалена из Keychain.\n\nАккаунт не будет разлогинен из Limegram.";
 "SessionBackup.RemoveFromApp.Title" = "Удалить аккаунт из приложения?";
-"SessionBackup.RemoveFromApp.Text" = "%@ сессия БУДЕТ УДАЛЕНА из Swiftgram! Сессия останется активной, чтобы вы могли восстановить ее позже.";
+"SessionBackup.RemoveFromApp.Text" = "%@ сессия БУДЕТ УДАЛЕНА из Limegram! Сессия останется активной, чтобы вы могли восстановить ее позже.";
 "SessionBackup.Notice" = "Сессии шифруются и хранятся в Keychain устройства. Сессии никогда не покидают ваше устройство.\n\nВАЖНО: Чтобы восстановить сессии на новом устройстве или после сброса системы, ОБЯЗАТЕЛЬНО включите шифрование резервных копий ОС, иначе Keychain будет утерян при восстановлении.\n\nПРИМЕЧАНИЕ: Сессии всё ещё могут быть разлогинены самим Telegram или с другого устройства.";
 
 "MessageFilter.Title" = "Фильтр сообщений";

@@ -41,11 +41,23 @@ func _internal_registerNotificationToken(account: Account, token: Data, type: No
         if excludeMutedChats {
             flags |= 1 << 0
         }
+        // MARK: Swiftgram
+        // The `catch` below reports success for every error except
+        // TOKEN_WAS_INVALIDATED, so a server-side push misconfiguration is
+        // completely silent: the app believes it registered and no notification
+        // ever arrives. Log the outcome so APP_PUSH_CERT_MISSING and similar are
+        // visible. Turn on Settings > Swiftgram > Debug > Logging to capture this
+        // in a release/TestFlight build, then search the log for "PushToken".
+        let tokenPrefix = String(hexString(token).prefix(8))
+        Logger.shared.log("PushToken", "registerDevice: type=\(mappedType) sandbox=\(sandbox) encrypted=\(!keyData.isEmpty) excludeMuted=\(excludeMutedChats) tokenLength=\(token.count) tokenPrefix=\(tokenPrefix)")
+
         return account.network.request(Api.functions.account.registerDevice(flags: flags, tokenType: mappedType, token: hexString(token), appSandbox: sandbox ? .boolTrue : .boolFalse, secret: Buffer(data: keyData), otherUids: otherAccountUserIds.map({ $0._internalGetInt64Value() })))
         |> map { _ -> Bool in
+            Logger.shared.log("PushToken", "registerDevice OK: type=\(mappedType) sandbox=\(sandbox) tokenPrefix=\(tokenPrefix)")
             return true
         }
         |> `catch` { error -> Signal<Bool, NoError> in
+            Logger.shared.log("PushToken", "registerDevice FAILED: type=\(mappedType) sandbox=\(sandbox) tokenPrefix=\(tokenPrefix) error=\(error.errorDescription ?? "unknown")")
             if error.errorDescription == "TOKEN_WAS_INVALIDATED" {
                 return .single(false)
             } else {

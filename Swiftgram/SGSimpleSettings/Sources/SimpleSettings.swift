@@ -234,7 +234,14 @@ public class SGSimpleSettings {
         case azure
         case openai
         case openaiRealtime
-        // Make sure to update TranslationConfiguration
+        case openaiCasual
+        // NOTE: the old "update TranslationConfiguration" note here was stale.
+        // TranslationConfiguration (AccountContext) is Telegram's *server*
+        // app-config for translations_manual_enabled / translations_auto_enabled
+        // and has nothing to do with these cases. Adding a case means updating
+        // translationBackendUsesLocalText below, the three dispatch functions in
+        // TelegramCore, the SGSettingsController picker, SGTranslationCompareModel
+        // (both its init and start()), and the Backend.<case> string.
     }
         
     public enum PinnedMessageNotificationsSettings: String, CaseIterable {
@@ -623,7 +630,7 @@ extension SGSimpleSettings {
     // "via text" path is required regardless of Premium status.
     public var translationBackendUsesLocalText: Bool {
         switch self.translationBackendEnum {
-        case .gtranslate, .azure, .openai, .openaiRealtime:
+        case .gtranslate, .azure, .openai, .openaiRealtime, .openaiCasual:
             return true
         case .default, .system:
             return false

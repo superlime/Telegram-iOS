@@ -5,6 +5,7 @@ sgdeps = [
     "//Swiftgram/SGAzureTranslate:SGAzureTranslate",
     "//Swiftgram/SGOpenAITranslate:SGOpenAITranslate",
     "//Swiftgram/SGOpenAIRealtimeTranslate:SGOpenAIRealtimeTranslate",
+    "//Swiftgram/SGOpenAICasualTranslate:SGOpenAICasualTranslate",
     "//Swiftgram/SGSimpleSettings:SGSimpleSettings",
     "//Swiftgram/SGTranslationLangFix:SGTranslationLangFix",
     "//Swiftgram/SGWebSettingsScheme:SGWebSettingsScheme",

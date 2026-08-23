@@ -149,6 +149,7 @@ Settings ▸ Translation ▸ Service and stored as
 | `azure` | `Swiftgram/SGAzureTranslate` — Azure AI Translator REST v3.0, native array batching |
 | `openai` | `Swiftgram/SGOpenAITranslate` — OpenAI chat completions behind a translation prompt, one request per message |
 | `openaiRealtime` | `Swiftgram/SGOpenAIRealtimeTranslate` — `gpt-realtime-2` over the realtime WebSocket, batches sequentially down one socket |
+| `openaiCasual` | `Swiftgram/SGOpenAICasualTranslate` — `gpt-4o` over chat completions, prompted for casual/regional register rather than fidelity |
 
 The selection is applied in `sgWrappedTranslateSingle` / `sgWrappedTranslateMultiple`
 (`TelegramCore/.../TelegramEngineMessages.swift`) and `sgTranslateViaText`
@@ -180,9 +181,30 @@ Two consequences worth knowing before changing it:
   not to, so a single pair of wrapping quotes is stripped — unless the original
   message was itself quoted.
 
+There are **two** chat-completions backends, `openai` (gpt-5.1) and
+`openaiCasual` (gpt-4o). They are the same code with a different model and
+prompt: `openai` is told to preserve the original and not editorialise, while
+`openaiCasual` is told to write what a native speaker would actually say —
+regional idiom, contractions, relaxed register — favouring that over literal
+accuracy. Measured side by side, `T'inquiète pas, c'est pas grave` versus
+`Pas de souci, ce n'est pas grave`. Neither is strictly better; that is why both
+are selectable and why the comparison screen shows them together.
+
+`SGOpenAICasualTranslate` is a **mechanical copy** of `SGOpenAITranslate` with
+symbols renamed, not a reimplementation, and the two output-cleaning helpers
+(`sgStripModelQuoting`, `sgParseOpenAIErrorMessage`) are exported from
+`SGOpenAITranslate` and imported rather than duplicated — so the pair cannot
+drift in how they strip model quoting or surface errors. Its prompt keeps the
+formatting sentence about @mentions, URLs and code spans: that is not padding,
+without it the model rewrites mentions and breaks messages rather than merely
+restyling them.
+
 The request body is intentionally just `model` + `messages`. Newer
 reasoning-capable models reject `temperature` and renamed `max_tokens`, so
 omitting both keeps the backend working across whatever model id is configured.
+That applies to the casual backend too — gpt-4o would accept `temperature`, but
+the prompt carries the register and a minimal body keeps the model constant
+swappable.
 HTTP failures carry OpenAI's own `error.message` through to the comparison
 screen, which is what makes a misconfigured model self-diagnosing.
 

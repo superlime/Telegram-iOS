@@ -58,7 +58,11 @@ public func sgStripModelQuoting(_ raw: String, original: String) -> String {
     return text.trimmingCharacters(in: .whitespacesAndNewlines)
 }
 
-private func parseErrorMessage(_ data: Data?) -> String? {
+// MARK: Swiftgram
+// Shared by the chat-completions OpenAI backends: pulls OpenAI's own
+// `error.message` out of a failure body so a misconfigured model is
+// self-diagnosing in the comparison screen. Exported rather than duplicated.
+public func sgParseOpenAIErrorMessage(_ data: Data?) -> String? {
     guard let data: Data = data else {
         return nil
     }
@@ -117,7 +121,7 @@ public func openAITranslate(_ text: String, _ toLang: String) -> Signal<String, 
                 return
             }
             guard response.statusCode == 200 else {
-                subscriber.putError(.api(response.statusCode, parseErrorMessage(data)))
+                subscriber.putError(.api(response.statusCode, sgParseOpenAIErrorMessage(data)))
                 return
             }
             guard let data: Data = data,

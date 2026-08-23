@@ -22,6 +22,7 @@ swift_library(
         "//Swiftgram/SGAzureTranslate:SGAzureTranslate",
         "//Swiftgram/SGOpenAITranslate:SGOpenAITranslate",
         "//Swiftgram/SGOpenAIRealtimeTranslate:SGOpenAIRealtimeTranslate",
+        "//Swiftgram/SGOpenAICasualTranslate:SGOpenAICasualTranslate",
         "//Swiftgram/SGStrings:SGStrings",
 #        "//Swiftgram/SGAPI:SGAPI",
         "//Swiftgram/SGAPIToken:SGAPIToken",

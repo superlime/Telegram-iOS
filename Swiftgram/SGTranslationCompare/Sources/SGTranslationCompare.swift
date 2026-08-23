@@ -8,6 +8,7 @@ import SGGTranslate
 import SGAzureTranslate
 import SGOpenAITranslate
 import SGOpenAIRealtimeTranslate
+import SGOpenAICasualTranslate
 
 // MARK: Swiftgram
 //
@@ -70,6 +71,10 @@ public final class SGTranslationCompareModel: ObservableObject {
                 if !isOpenAIRealtimeTranslateConfigured {
                     state = .skipped(reason: "no OpenAI key in this build")
                 }
+            case .openaiCasual:
+                if !isOpenAICasualTranslateConfigured {
+                    state = .skipped(reason: "no OpenAI key in this build")
+                }
             case .system:
                 if #available(iOS 18.0, *) {
                 } else {
@@ -121,6 +126,8 @@ public final class SGTranslationCompareModel: ObservableObject {
                 self.startOpenAI(index: index)
             case .openaiRealtime:
                 self.startOpenAIRealtime(index: index)
+            case .openaiCasual:
+                self.startOpenAICasual(index: index)
             case .system:
                 break // driven by the SwiftUI layer
             }
@@ -192,6 +199,38 @@ public final class SGTranslationCompareModel: ObservableObject {
     private func startOpenAI(index: Int) {
         let started = CFAbsoluteTimeGetCurrent()
         let signal = openAITranslate(self.sourceText, self.toLang)
+        |> deliverOnMainQueue
+        let disposable = signal.start(next: { [weak self] text in
+            guard let strongSelf = self else {
+                return
+            }
+            if text.isEmpty {
+                strongSelf.update(index, .failure(reason: "empty response", milliseconds: elapsedMilliseconds(since: started)))
+            } else {
+                strongSelf.update(index, .success(text: text, milliseconds: elapsedMilliseconds(since: started)))
+            }
+        }, error: { [weak self] error in
+            let reason: String
+            switch error {
+            case .notConfigured:
+                reason = "no credentials in this build"
+            case .network:
+                reason = "network error"
+            case let .api(statusCode, message):
+                if let message = message {
+                    reason = "HTTP \(statusCode): \(message)"
+                } else {
+                    reason = "HTTP \(statusCode)"
+                }
+            }
+            self?.update(index, .failure(reason: reason, milliseconds: elapsedMilliseconds(since: started)))
+        })
+        self.disposables.append(disposable)
+    }
+
+    private func startOpenAICasual(index: Int) {
+        let started = CFAbsoluteTimeGetCurrent()
+        let signal = openAICasualTranslate(self.sourceText, self.toLang)
         |> deliverOnMainQueue
         let disposable = signal.start(next: { [weak self] text in
             guard let strongSelf = self else {

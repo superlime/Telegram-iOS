@@ -49,7 +49,10 @@ The first app-side `ios_unit_test` is `//submodules/TextFormat:TextFormatTests` 
 `simctl install` will NOT replace an already-installed app when the build number is unchanged (installd keeps a hard-link cache), so a rebuilt binary silently doesn't take effect. **Preferred fix: copy the whole freshly-built `.app` over the installed bundle in place.** This is more robust than swapping only the `Frameworks/TelegramUIFramework` binary (no risk of app↔framework version skew), and it preserves the account/login because the **data container is a separate path** (`.../data/Containers/Data/Application/<uuid>/`, keyed by bundle id) — only the **bundle** container is replaced, and the install-DB entry stays valid since the path + bundle id are unchanged.
 
 ```sh
-K3=FA6F7462-AA97-42FE-9E57-8DA0593CE756   # iPhone 17 Pro K3 (use the dedicated K-sims, not the shared default)
+# Look the UDID up; do not hardcode it. The dedicated "K" sims referenced in an
+# earlier version of this file no longer exist, and simctl answers a stale UDID
+# with "Invalid device" rather than anything that hints the name has changed.
+K3="$(xcrun simctl list devices available | awk -F'[()]' '/iPhone 17 Pro \(/{print $2; exit}')"
 BUNDLE=org.ccc38e857449d6e8.Limegram   # from build-system/local-development-configuration.json
 # Fresh build output (unzipped bundle, not the .ipa). `-L` is REQUIRED — `bazel-out` is a symlink,
 # so a plain `find bazel-out …` silently returns nothing:

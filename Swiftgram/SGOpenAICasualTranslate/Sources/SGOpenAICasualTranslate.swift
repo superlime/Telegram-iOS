@@ -38,7 +38,51 @@ private let sgOpenAICasualTranslateSession: URLSession = {
     return URLSession(configuration: configuration)
 }()
 
-public func openAICasualTranslate(_ text: String, _ toLang: String) -> Signal<String, OpenAICasualTranslateError> {
+// MARK: Swiftgram
+// One preceding message, as handed to the model for context.
+//
+// `sender` is a short label ("You", a first name), never a full contact record:
+// the model needs it to get gendered agreement and formality (tu/vous, du/Sie)
+// right, and a first name is enough for that. Callers build these; this module
+// only formats them.
+public struct SGCasualTranslateContextMessage {
+    public let sender: String?
+    public let text: String
+
+    public init(sender: String?, text: String) {
+        self.sender = sender
+        self.text = text
+    }
+}
+
+/// Renders the context window as a short labelled transcript. Each line is
+/// clipped so one long message cannot dominate the request.
+private func contextTranscript(_ context: [SGCasualTranslateContextMessage]) -> String? {
+    var lines: [String] = []
+    for entry in context {
+        var line: String = entry.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if line.isEmpty {
+            continue
+        }
+        if line.count > SGOpenAICasualTranslateConfig.maxContextMessageCharacters {
+            line = String(line.prefix(SGOpenAICasualTranslateConfig.maxContextMessageCharacters)) + "..."
+        }
+        // Newlines inside a quoted message would break the one-line-per-turn
+        // shape the model is being shown, so flatten them.
+        line = line.replacingOccurrences(of: "\n", with: " ")
+        if let sender = entry.sender, !sender.isEmpty {
+            lines.append("\(sender): \(line)")
+        } else {
+            lines.append(line)
+        }
+    }
+    if lines.isEmpty {
+        return nil
+    }
+    return lines.joined(separator: "\n")
+}
+
+public func openAICasualTranslate(_ text: String, _ toLang: String, context: [SGCasualTranslateContextMessage] = []) -> Signal<String, OpenAICasualTranslateError> {
     if SGOpenAITranslateCredentials.key.isEmpty {
         return .fail(.notConfigured)
     }
@@ -49,13 +93,24 @@ public func openAICasualTranslate(_ text: String, _ toLang: String) -> Signal<St
         return .fail(.notConfigured)
     }
 
-    let systemPrompt: String = String(format: SGOpenAICasualTranslateConfig.systemPrompt, toLang)
+    // With no context this builds byte-identical requests to before, so the
+    // context-free callers (the comparison screen, the batch path) are
+    // unaffected by this feature.
+    var systemPrompt: String = String(format: SGOpenAICasualTranslateConfig.systemPrompt, toLang)
+    var messages: [[String: Any]] = []
+    if let transcript = contextTranscript(context) {
+        systemPrompt += " " + SGOpenAICasualTranslateConfig.contextInstruction
+        messages.append(["role": "system", "content": systemPrompt])
+        messages.append(["role": "user", "content": "Recent conversation, for context only:\n" + transcript])
+        messages.append(["role": "user", "content": "Message to translate:\n" + text])
+    } else {
+        messages.append(["role": "system", "content": systemPrompt])
+        messages.append(["role": "user", "content": text])
+    }
+
     let body: [String: Any] = [
         "model": SGOpenAICasualTranslateConfig.model,
-        "messages": [
-            ["role": "system", "content": systemPrompt],
-            ["role": "user", "content": text]
-        ]
+        "messages": messages
     ]
     guard let bodyData: Data = try? JSONSerialization.data(withJSONObject: body, options: []) else {
         return .fail(.network)

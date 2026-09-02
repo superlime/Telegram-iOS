@@ -490,7 +490,7 @@ private func _internal_translateMessagesByPeerId(account: Account, peerId: Engin
 }
 
 // MARK: Swiftgram
-private func sgTranslateViaText(_ text: String, _ toLang: String) -> Signal<String, TranslateFetchError> {
+private func sgTranslateViaText(_ text: String, _ toLang: String, _ context: [SGCasualTranslateContextMessage] = []) -> Signal<String, TranslateFetchError> {
     if SGSimpleSettings.shared.translationBackend == SGSimpleSettings.TranslationBackend.openaiRealtime.rawValue, isOpenAIRealtimeTranslateConfigured {
         return openAIRealtimeTranslate(text, toLang)
             |> mapError { _ -> TranslateFetchError in
@@ -501,7 +501,7 @@ private func sgTranslateViaText(_ text: String, _ toLang: String) -> Signal<Stri
             }
     }
     if SGSimpleSettings.shared.translationBackend == SGSimpleSettings.TranslationBackend.openaiCasual.rawValue, isOpenAICasualTranslateConfigured {
-        return openAICasualTranslate(text, toLang)
+        return openAICasualTranslate(text, toLang, context: context)
             |> mapError { _ -> TranslateFetchError in
                 return .network
             }
@@ -530,7 +530,100 @@ private func sgTranslateViaText(_ text: String, _ toLang: String) -> Signal<Stri
     return gtranslate(text, toLang)
 }
 
+// MARK: Swiftgram
+// A short sender label for the context window: a first name where there is one,
+// "You" for the account's own messages. Deliberately not the full display title
+// - the model needs just enough to tell participants apart and pick gendered
+// agreement and formality; a phone number or full contact name is more than
+// that, and it would be leaving the device.
+private func sgContextSenderLabel(_ message: Message, accountPeerId: PeerId) -> String? {
+    if !message.flags.contains(.Incoming) {
+        return "You"
+    }
+    guard let author = message.author else {
+        return nil
+    }
+    if author.id == accountPeerId {
+        return "You"
+    }
+    if let user = author as? TelegramUser {
+        if let firstName = user.firstName, !firstName.isEmpty {
+            return firstName
+        }
+    }
+    let title = author.debugDisplayTitle
+    return title.isEmpty ? nil : title
+}
+
+// MARK: Swiftgram
+// Collects the messages immediately preceding each one being translated, so the
+// casual backend can resolve pronouns, referents and register.
+//
+// Only gathered for that one backend - every other backend still sees a bare
+// message, and this returns empty without touching the postbox for them. That
+// matters: context means sending neighbouring messages, including other
+// people's and ones nobody asked to translate, to a third party.
+private func sgGatherCasualContext(account: Account, messageIds: [EngineMessage.Id]) -> Signal<[EngineMessage.Id: [SGCasualTranslateContextMessage]], NoError> {
+    guard SGSimpleSettings.shared.translationBackend == SGSimpleSettings.TranslationBackend.openaiCasual.rawValue, isOpenAICasualTranslateConfigured else {
+        return .single([:])
+    }
+    if messageIds.isEmpty {
+        return .single([:])
+    }
+    let window: Int = SGOpenAICasualTranslateConfig.contextMessageCount
+    return account.postbox.transaction { transaction -> [EngineMessage.Id: [SGCasualTranslateContextMessage]] in
+        var result: [EngineMessage.Id: [SGCasualTranslateContextMessage]] = [:]
+        let accountPeerId: PeerId = account.peerId
+        for messageId in messageIds {
+            guard let target = transaction.getMessage(messageId) else {
+                continue
+            }
+            // Over-fetch: service messages, media without captions and the
+            // anchor itself all get filtered out below.
+            let view = transaction.getMessagesHistoryViewState(
+                input: .single(peerId: messageId.peerId, threadId: target.threadId),
+                ignoreMessagesInTimestampRange: nil,
+                ignoreMessageIds: Set(),
+                count: window * 4,
+                clipHoles: true,
+                anchor: .message(messageId),
+                namespaces: .just(Set([Namespaces.Message.Cloud]))
+            )
+            var collected: [SGCasualTranslateContextMessage] = []
+            for entry in view.entries {
+                let message = entry.message
+                if message.id == messageId {
+                    continue
+                }
+                // Strictly preceding - a later message is not context the
+                // sender could have been responding to.
+                if message.index >= target.index {
+                    continue
+                }
+                if message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    continue
+                }
+                collected.append(SGCasualTranslateContextMessage(
+                    sender: sgContextSenderLabel(message, accountPeerId: accountPeerId),
+                    text: message.text
+                ))
+            }
+            // entries run oldest-first, so the nearest context is at the end.
+            if collected.count > window {
+                collected = Array(collected.suffix(window))
+            }
+            if !collected.isEmpty {
+                result[messageId] = collected
+            }
+        }
+        return result
+    }
+}
+
 func _internal_translateMessagesViaText(account: Account, messagesDict: [EngineMessage.Id: String], fromLang: String?, toLang: String, enableLocalIfPossible: Bool, generateEntitiesFunction: @escaping (String) -> [MessageTextEntity]) -> Signal<Never, TranslationError> {
+    return sgGatherCasualContext(account: account, messageIds: Array(messagesDict.keys))
+    |> castError(TranslationError.self)
+    |> mapToSignal { contextByMessageId -> Signal<Never, TranslationError> in
     var listOfSignals: [Signal<Void, TranslationError>] = []
     for (messageId, text) in messagesDict {
         listOfSignals.append(
@@ -539,7 +632,7 @@ func _internal_translateMessagesViaText(account: Account, messagesDict: [EngineM
             //                guard let translatedText = result else {
             //                    return .complete()
             //                }
-            sgTranslateViaText(text, toLang)
+            sgTranslateViaText(text, toLang, contextByMessageId[messageId] ?? [])
             |> mapError { _ -> TranslationError in
                 return .generic
             }
@@ -564,6 +657,7 @@ func _internal_translateMessagesViaText(account: Account, messagesDict: [EngineM
         )
     }
     return combineLatest(listOfSignals) |> ignoreValues
+    }
 }
 
 func _internal_togglePeerMessagesTranslationHidden(account: Account, peerId: EnginePeer.Id, hidden: Bool) -> Signal<Never, NoError> {

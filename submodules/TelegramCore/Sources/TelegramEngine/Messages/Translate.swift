@@ -3,6 +3,7 @@ import SGAzureTranslate
 import SGOpenAITranslate
 import SGOpenAIRealtimeTranslate
 import SGOpenAICasualTranslate
+import SGOpenAILunaTranslate
 import SGSimpleSettings
 import SGTranslationLangFix
 
@@ -500,6 +501,15 @@ private func sgTranslateViaText(_ text: String, _ toLang: String, _ context: [SG
                 return gtranslate(text, toLang)
             }
     }
+    if SGSimpleSettings.shared.translationBackend == SGSimpleSettings.TranslationBackend.openaiLuna.rawValue, isOpenAILunaTranslateConfigured {
+        return openAILunaTranslate(text, toLang, context: context)
+            |> mapError { _ -> TranslateFetchError in
+                return .network
+            }
+            |> `catch` { _ -> Signal<String, TranslateFetchError> in
+                return gtranslate(text, toLang)
+            }
+    }
     if SGSimpleSettings.shared.translationBackend == SGSimpleSettings.TranslationBackend.openaiCasual.rawValue, isOpenAICasualTranslateConfigured {
         return openAICasualTranslate(text, toLang, context: context)
             |> mapError { _ -> TranslateFetchError in
@@ -563,14 +573,28 @@ private func sgContextSenderLabel(_ message: Message, accountPeerId: PeerId) -> 
 // message, and this returns empty without touching the postbox for them. That
 // matters: context means sending neighbouring messages, including other
 // people's and ones nobody asked to translate, to a third party.
+// MARK: Swiftgram
+// How many preceding messages the selected backend wants, or nil for the
+// backends that take none. Keeping this in one place is what stops a new
+// context-taking provider from silently getting no context.
+private func sgSelectedBackendContextWindow() -> Int? {
+    let backend: String = SGSimpleSettings.shared.translationBackend
+    if backend == SGSimpleSettings.TranslationBackend.openaiCasual.rawValue, isOpenAICasualTranslateConfigured {
+        return SGOpenAICasualTranslateConfig.contextMessageCount
+    }
+    if backend == SGSimpleSettings.TranslationBackend.openaiLuna.rawValue, isOpenAILunaTranslateConfigured {
+        return SGOpenAILunaTranslateConfig.contextMessageCount
+    }
+    return nil
+}
+
 private func sgGatherCasualContext(account: Account, messageIds: [EngineMessage.Id]) -> Signal<[EngineMessage.Id: [SGCasualTranslateContextMessage]], NoError> {
-    guard SGSimpleSettings.shared.translationBackend == SGSimpleSettings.TranslationBackend.openaiCasual.rawValue, isOpenAICasualTranslateConfigured else {
+    guard let window: Int = sgSelectedBackendContextWindow() else {
         return .single([:])
     }
     if messageIds.isEmpty {
         return .single([:])
     }
-    let window: Int = SGOpenAICasualTranslateConfig.contextMessageCount
     return account.postbox.transaction { transaction -> [EngineMessage.Id: [SGCasualTranslateContextMessage]] in
         var result: [EngineMessage.Id: [SGCasualTranslateContextMessage]] = [:]
         let accountPeerId: PeerId = account.peerId

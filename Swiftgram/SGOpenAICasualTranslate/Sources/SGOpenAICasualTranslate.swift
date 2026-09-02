@@ -57,15 +57,18 @@ public struct SGCasualTranslateContextMessage {
 
 /// Renders the context window as a short labelled transcript. Each line is
 /// clipped so one long message cannot dominate the request.
-private func contextTranscript(_ context: [SGCasualTranslateContextMessage]) -> String? {
+///
+/// Public because every chat-completions provider that takes context formats it
+/// the same way; duplicating this is how the providers would drift.
+public func sgFormatTranslationContext(_ context: [SGCasualTranslateContextMessage], maxCharacters: Int) -> String? {
     var lines: [String] = []
     for entry in context {
         var line: String = entry.text.trimmingCharacters(in: .whitespacesAndNewlines)
         if line.isEmpty {
             continue
         }
-        if line.count > SGOpenAICasualTranslateConfig.maxContextMessageCharacters {
-            line = String(line.prefix(SGOpenAICasualTranslateConfig.maxContextMessageCharacters)) + "..."
+        if line.count > maxCharacters {
+            line = String(line.prefix(maxCharacters)) + "..."
         }
         // Newlines inside a quoted message would break the one-line-per-turn
         // shape the model is being shown, so flatten them.
@@ -98,7 +101,7 @@ public func openAICasualTranslate(_ text: String, _ toLang: String, context: [SG
     // unaffected by this feature.
     var systemPrompt: String = String(format: SGOpenAICasualTranslateConfig.systemPrompt, toLang)
     var messages: [[String: Any]] = []
-    if let transcript = contextTranscript(context) {
+    if let transcript = sgFormatTranslationContext(context, maxCharacters: SGOpenAICasualTranslateConfig.maxContextMessageCharacters) {
         systemPrompt += " " + SGOpenAICasualTranslateConfig.contextInstruction
         messages.append(["role": "system", "content": systemPrompt])
         messages.append(["role": "user", "content": "Recent conversation, for context only:\n" + transcript])

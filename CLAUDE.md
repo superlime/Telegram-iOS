@@ -149,7 +149,8 @@ Settings ▸ Translation ▸ Service and stored as
 | `azure` | `Swiftgram/SGAzureTranslate` — Azure AI Translator REST v3.0, native array batching |
 | `openai` | `Swiftgram/SGOpenAITranslate` — OpenAI chat completions behind a translation prompt, one request per message |
 | `openaiRealtime` | `Swiftgram/SGOpenAIRealtimeTranslate` — `gpt-realtime-2` over the realtime WebSocket, batches sequentially down one socket |
-| `openaiCasual` | `Swiftgram/SGOpenAICasualTranslate` — `gpt-4o` over chat completions, prompted for casual/regional register rather than fidelity |
+| `openaiCasual` | `Swiftgram/SGOpenAICasualTranslate` — `gpt-4o` over chat completions, casual register, 6-message context window |
+| `openaiLuna` | `Swiftgram/SGOpenAILunaTranslate` — `gpt-5.6-luna`, the same provider and prompt as `openaiCasual` with a 20-message window |
 
 The selection is applied in `sgWrappedTranslateSingle` / `sgWrappedTranslateMultiple`
 (`TelegramCore/.../TelegramEngineMessages.swift`) and `sgTranslateViaText`
@@ -189,6 +190,23 @@ regional idiom, contractions, relaxed register — favouring that over literal
 accuracy. Measured side by side, `T'inquiète pas, c'est pas grave` versus
 `Pas de souci, ce n'est pas grave`. Neither is strictly better; that is why both
 are selectable and why the comparison screen shows them together.
+
+`SGOpenAILunaTranslate` is in turn a mechanical copy of the casual provider,
+differing in exactly two values: `model` (`gpt-5.6-luna`) and
+`contextMessageCount` (20 against 6). It does not copy the prompt — it
+*references* `SGOpenAICasualTranslateConfig.systemPrompt` and
+`.contextInstruction`, so the two cannot drift and a side-by-side isolates the
+model and window rather than comparing two prompts. Verify a model exists before
+wiring it: `GET /v1/models` on the account currently lists `gpt-5.6-luna`,
+`gpt-5.6-sol` and `gpt-5.6-terra`.
+
+The wider window is measurable. With the antecedent 14 messages back, the
+6-message provider loses it and answers `¿Está bueno?`; the 20-message one still
+sees it and answers `¿Está buena?`.
+
+The per-backend window lives in `sgSelectedBackendContextWindow()`
+(`Translate.swift`) — a new context-taking provider must be added there or it
+silently gets none.
 
 `SGOpenAICasualTranslate` is a **mechanical copy** of `SGOpenAITranslate` with
 symbols renamed, not a reimplementation, and the two output-cleaning helpers

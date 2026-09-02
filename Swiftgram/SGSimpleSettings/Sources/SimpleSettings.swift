@@ -235,6 +235,7 @@ public class SGSimpleSettings {
         case openai
         case openaiRealtime
         case openaiCasual
+        case openaiLuna
         // NOTE: the old "update TranslationConfiguration" note here was stale.
         // TranslationConfiguration (AccountContext) is Telegram's *server*
         // app-config for translations_manual_enabled / translations_auto_enabled
@@ -630,7 +631,7 @@ extension SGSimpleSettings {
     // "via text" path is required regardless of Premium status.
     public var translationBackendUsesLocalText: Bool {
         switch self.translationBackendEnum {
-        case .gtranslate, .azure, .openai, .openaiRealtime, .openaiCasual:
+        case .gtranslate, .azure, .openai, .openaiRealtime, .openaiCasual, .openaiLuna:
             return true
         case .default, .system:
             return false

@@ -26,6 +26,7 @@ swift_library(
         "//Swiftgram/SGOpenAITranslate:SGOpenAITranslate",
         "//Swiftgram/SGOpenAIRealtimeTranslate:SGOpenAIRealtimeTranslate",
         "//Swiftgram/SGOpenAICasualTranslate:SGOpenAICasualTranslate",
+        "//Swiftgram/SGOpenAILunaTranslate:SGOpenAILunaTranslate",
     ],
     visibility = [
         "//visibility:public",

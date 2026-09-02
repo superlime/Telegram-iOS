@@ -55,6 +55,7 @@
 "Settings.Translation.Backend.openai" = "OpenAI";
 "Settings.Translation.Backend.openaiRealtime" = "OpenAI Realtime";
 "Settings.Translation.Backend.openaiCasual" = "OpenAI 4o (Casual)";
+"Settings.Translation.Backend.openaiLuna" = "OpenAI 5.6 Luna";
 "Settings.Translation.Compare" = "Compare services in message menu";
 "Settings.Translation.Compare.Notice" = "Adds a Compare Translations item to the message context menu that translates the message with every available service at once, so you can see which one produced what.";
 "Message.Context.CompareTranslations" = "Compare Translations";

@@ -5,6 +5,7 @@ import SGAzureTranslate
 import SGOpenAITranslate
 import SGOpenAIRealtimeTranslate
 import SGOpenAICasualTranslate
+import SGOpenAILunaTranslate
 import SGStrings
 import SGAPIToken
 
@@ -650,6 +651,9 @@ public func sgSettingsController(context: AccountContext/*, focusOnItemTag: Int?
                         continue // OpenAI credentials were not baked into this build
                     }
                     if value == .openaiCasual && !isOpenAICasualTranslateConfigured {
+                        continue // OpenAI credentials were not baked into this build
+                    }
+                    if value == .openaiLuna && !isOpenAILunaTranslateConfigured {
                         continue // OpenAI credentials were not baked into this build
                     }
                     if value == .system {

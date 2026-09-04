@@ -13,6 +13,8 @@ final class ButtonGroupView: OverlayMaskContainerView {
                 case flipCamera
                 case video
                 case microphone
+                // MARK: Swiftgram
+                case translate
                 case end
             }
             
@@ -20,6 +22,8 @@ final class ButtonGroupView: OverlayMaskContainerView {
             case flipCamera
             case video(isActive: Bool)
             case microphone(isMuted: Bool)
+            // MARK: Swiftgram
+            case translate(isActive: Bool)
             case end
             
             var key: Key {
@@ -32,6 +36,9 @@ final class ButtonGroupView: OverlayMaskContainerView {
                     return .video
                 case .microphone:
                     return .microphone
+                // MARK: Swiftgram
+                case .translate:
+                    return .translate
                 case .end:
                     return .end
                 }
@@ -41,11 +48,14 @@ final class ButtonGroupView: OverlayMaskContainerView {
         let content: Content
         let isEnabled: Bool
         let action: () -> Void
+        // MARK: Swiftgram
+        let longPressAction: (() -> Void)?
         
-        init(content: Content, isEnabled: Bool, action: @escaping () -> Void) {
+        init(content: Content, isEnabled: Bool, action: @escaping () -> Void, longPressAction: (() -> Void)? = nil) {
             self.content = content
             self.isEnabled = isEnabled
             self.action = action
+            self.longPressAction = longPressAction
         }
     }
     
@@ -86,11 +96,44 @@ final class ButtonGroupView: OverlayMaskContainerView {
         return result
     }
     
+    // MARK: Swiftgram
+    // The Button value behind a view is replaced on every state update, so the
+    // handler looks the current one up by key at fire time instead of capturing
+    // it. Capturing would leave the menu invoking a stale closure.
+    @objc private func sgHandleLongPress(_ recognizer: UILongPressGestureRecognizer) {
+        guard case .began = recognizer.state else {
+            return
+        }
+        guard let view = recognizer.view else {
+            return
+        }
+        guard let key = self.buttonViews.first(where: { $0.value === view })?.key else {
+            return
+        }
+        guard let button = self.buttons?.first(where: { $0.content.key == key }), button.isEnabled else {
+            return
+        }
+        button.longPressAction?()
+    }
+    
     func update(size: CGSize, insets: UIEdgeInsets, minWidth: CGFloat, controlsHidden: Bool, displayClose: Bool, strings: PresentationStrings, buttons: [Button], notices: [Notice], isAnimatedOutToGroupCall: Bool, transition: ComponentTransition) -> CGFloat {
         self.buttons = buttons
         
         let buttonSize: CGFloat = 56.0
-        let buttonSpacing: CGFloat = 36.0
+        // MARK: Swiftgram
+        // Spacing adapts to the number of buttons instead of being fixed at 36.
+        // The original layout only ever had to fit four; a fifth (translate) at
+        // 36pt makes the row 424pt, which overflows a 390pt iPhone and pushes
+        // the outer buttons off screen. Four buttons still lay out exactly as
+        // before, because 36 is the cap rather than the constant.
+        let buttonSpacing: CGFloat
+        if buttons.count > 1 {
+            let sideInset: CGFloat = 16.0
+            let availableForGaps: CGFloat = size.width - sideInset * 2.0 - buttonSize * CGFloat(buttons.count)
+            buttonSpacing = max(8.0, min(36.0, floor(availableForGaps / CGFloat(buttons.count - 1))))
+        } else {
+            buttonSpacing = 36.0
+        }
         
         let buttonNoticeSpacing: CGFloat = 16.0
         let controlsHiddenNoticeSpacing: CGFloat = 0.0
@@ -266,6 +309,16 @@ final class ButtonGroupView: OverlayMaskContainerView {
                 title = strings.Call_Mute
                 image = UIImage(bundleImageName: "Call/Mute")
                 isActive = isActiveValue
+            // MARK: Swiftgram
+            // Reuses the existing chat translate glyph rather than adding a new
+            // asset: bundleImageName resolves against the merged app catalog, so
+            // the namespaced path works from here. It is drawn at 24pt against
+            // the call icons' larger artwork, so it reads slightly smaller than
+            // its neighbours — a dedicated Call/Translate asset would fix that.
+            case let .translate(isActiveValue):
+                title = "Translate"
+                image = UIImage(bundleImageName: "Chat/Context Menu/Translate")
+                isActive = isActiveValue
             case .end:
                 title = strings.Call_End
                 image = UIImage(bundleImageName: "Call/End")
@@ -290,6 +343,14 @@ final class ButtonGroupView: OverlayMaskContainerView {
                     }
                     button.action()
                 }
+                
+                // MARK: Swiftgram
+                // Looked up by key on each fire rather than captured, so the
+                // recogniser keeps working across state updates that replace
+                // the Button value behind an existing view.
+                let longPressRecognizer = UILongPressGestureRecognizer(target: self, action: #selector(self.sgHandleLongPress(_:)))
+                longPressRecognizer.minimumPressDuration = 0.4
+                buttonView.addGestureRecognizer(longPressRecognizer)
                 
                 ComponentTransition.immediate.setScale(view: buttonView, scale: 0.001)
                 buttonView.alpha = 0.0

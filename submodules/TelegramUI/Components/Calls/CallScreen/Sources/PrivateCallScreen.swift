@@ -83,6 +83,13 @@ public final class PrivateCallScreen: OverlayMaskContainerView, AVPictureInPictu
         public var isEnergySavingEnabled: Bool
         public var isConferencePossible: Bool
         public var enableVideoSharpening: Bool
+        // MARK: Swiftgram
+        /// Whether live call translation is running. nil means the feature is
+        /// unavailable for this call, and the button is not shown at all.
+        public var translationEnabled: Bool?
+        /// Translations of the last few utterances, oldest first, burned into
+        /// the outgoing video as subtitles.
+        public var translationSubtitles: [String]
         
         public init(
             strings: PresentationStrings,
@@ -99,7 +106,10 @@ public final class PrivateCallScreen: OverlayMaskContainerView, AVPictureInPictu
             isRemoteBatteryLow: Bool,
             isEnergySavingEnabled: Bool,
             isConferencePossible: Bool,
-            enableVideoSharpening: Bool
+            enableVideoSharpening: Bool,
+            // MARK: Swiftgram
+            translationEnabled: Bool? = nil,
+            translationSubtitles: [String] = []
         ) {
             self.strings = strings
             self.lifecycleState = lifecycleState
@@ -116,6 +126,9 @@ public final class PrivateCallScreen: OverlayMaskContainerView, AVPictureInPictu
             self.isEnergySavingEnabled = isEnergySavingEnabled
             self.isConferencePossible = isConferencePossible
             self.enableVideoSharpening = enableVideoSharpening
+            // MARK: Swiftgram
+            self.translationEnabled = translationEnabled
+            self.translationSubtitles = translationSubtitles
         }
         
         public static func ==(lhs: State, rhs: State) -> Bool {
@@ -162,6 +175,15 @@ public final class PrivateCallScreen: OverlayMaskContainerView, AVPictureInPictu
                 return false
             }
             if lhs.enableVideoSharpening != rhs.enableVideoSharpening {
+                return false
+            }
+            // MARK: Swiftgram
+            // == is hand-written and gates re-layout, so a new field that is not
+            // compared here simply never redraws.
+            if lhs.translationEnabled != rhs.translationEnabled {
+                return false
+            }
+            if lhs.translationSubtitles != rhs.translationSubtitles {
                 return false
             }
             return true
@@ -245,6 +267,10 @@ public final class PrivateCallScreen: OverlayMaskContainerView, AVPictureInPictu
     public var videoAction: (() -> Void)?
     public var microhoneMuteAction: (() -> Void)?
     public var endCallAction: (() -> Void)?
+    // MARK: Swiftgram
+    /// Tap toggles translation; long press opens the translation menu.
+    public var translationAction: (() -> Void)?
+    public var translationMenuAction: (() -> Void)?
     public var backAction: (() -> Void)?
     public var closeAction: (() -> Void)?
     public var restoreUIForPictureInPicture: ((@escaping (Bool) -> Void) -> Void)?
@@ -820,6 +846,22 @@ public final class PrivateCallScreen: OverlayMaskContainerView, AVPictureInPictu
                 self.endCallAction?()
             })
         ]
+        // MARK: Swiftgram
+        // Placed before End so the destructive button stays last. nil means the
+        // feature is unavailable for this call and the button is not shown.
+        if let translationEnabled = params.state.translationEnabled {
+            buttons.insert(ButtonGroupView.Button(content: .translate(isActive: translationEnabled), isEnabled: !isTerminated, action: { [weak self] in
+                guard let self else {
+                    return
+                }
+                self.translationAction?()
+            }, longPressAction: { [weak self] in
+                guard let self else {
+                    return
+                }
+                self.translationMenuAction?()
+            }), at: buttons.count - 1)
+        }
         if self.activeLocalVideoSource != nil {
             buttons.insert(ButtonGroupView.Button(content: .flipCamera, isEnabled: !isTerminated, action: { [weak self] in
                 guard let self else {

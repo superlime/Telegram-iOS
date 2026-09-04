@@ -41,7 +41,9 @@ apple_resource_bundle(
 )
 
 sgdeps = [
-    "//Swiftgram/SGAppGroupIdentifier:SGAppGroupIdentifier"
+    "//Swiftgram/SGAppGroupIdentifier:SGAppGroupIdentifier",
+    "//Swiftgram/SGSimpleSettings:SGSimpleSettings",
+    "//Swiftgram/SGCallTranslation:SGCallTranslation",
 ]
 
 swift_library(

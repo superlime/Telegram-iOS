@@ -18,6 +18,9 @@ import TelegramVoip
 import MetalEngine
 import DeviceAccess
 import LibYuvBinding
+// MARK: Swiftgram
+import SGSimpleSettings
+import SGCallTranslation
 
 final class CallControllerNodeV2: ViewControllerTracingNode, CallControllerNodeProtocol {
     private struct PanGestureState {
@@ -36,6 +39,10 @@ final class CallControllerNodeV2: ViewControllerTracingNode, CallControllerNodeP
     private let containerView: UIView
     private let callScreen: PrivateCallScreen
     private var callScreenState: PrivateCallScreen.State?
+    // MARK: Swiftgram
+    fileprivate var sgTranslationSession: SGCallTranslationSession?
+    fileprivate var sgTranslationIsEnabled: Bool = false
+    fileprivate var sgActionSheet: ActionSheetController?
     
     let isReady = Promise<Bool>()
     private var didInitializeIsReady: Bool = false
@@ -118,6 +125,20 @@ final class CallControllerNodeV2: ViewControllerTracingNode, CallControllerNodeP
             }
             self.toggleVideo()
         }
+        
+        // MARK: Swiftgram
+        self.callScreen.translationAction = { [weak self] in
+            guard let self else {
+                return
+            }
+            self.sgSetTranslationEnabled(!self.sgTranslationIsEnabled)
+        }
+        self.callScreen.translationMenuAction = { [weak self] in
+            guard let self else {
+                return
+            }
+            self.sgPresentTranslationMenu()
+        }
         self.callScreen.flipCameraAction = { [weak self] in
             guard let self else {
                 return
@@ -184,7 +205,18 @@ final class CallControllerNodeV2: ViewControllerTracingNode, CallControllerNodeP
             isRemoteBatteryLow: false,
             isEnergySavingEnabled: !self.sharedContext.energyUsageSettings.fullTranslucency,
             isConferencePossible: false,
-            enableVideoSharpening: enableVideoSharpening
+            enableVideoSharpening: enableVideoSharpening,
+            // MARK: Swiftgram
+            // nil hides the button entirely. It only appears once both services
+            // are configured and this contact has a language to translate into,
+            // rather than offering a control that cannot work.
+            translationEnabled: SGCallTranslationSession.isAvailable(
+                accountPeerId: call.context.account.peerId,
+                peerId: call.peerId
+            ) ? SGSimpleSettings.shared.isCallTranslationEnabled(
+                accountId: call.context.account.peerId.id._internalGetInt64Value(),
+                peerId: call.peerId.id._internalGetInt64Value()
+            ) : nil
         )
         
         self.isMicrophoneMutedDisposable = (call.isMuted
@@ -265,6 +297,10 @@ final class CallControllerNodeV2: ViewControllerTracingNode, CallControllerNodeP
         self.audioOutputCheckTimer?.invalidate()
         self.signalQualityTimer?.invalidate()
         self.applicationInForegroundDisposable?.dispose()
+        // MARK: Swiftgram
+        // The subtitle renderer is a process-wide singleton, so failing to clear
+        // it here would leak the last call's subtitles into the next one.
+        self.sgTearDownTranslation()
     }
     
     func updateAudioOutputs(availableOutputs: [AudioSessionOutput], currentOutput: AudioSessionOutput?) {
@@ -784,6 +820,15 @@ final class CallControllerNodeV2: ViewControllerTracingNode, CallControllerNodeP
                 callScreenState.isRemoteBatteryLow = false
                 callScreenState.localVideo = nil
                 callScreenState.remoteVideo = nil
+                // MARK: Swiftgram
+                // Stop at termination rather than waiting for deinit: the node
+                // can outlive the call while the end-of-call UI is shown, and
+                // until then the microphone sink would still be streaming.
+                if self.sgTranslationSession != nil {
+                    self.sgTearDownTranslation()
+                    callScreenState.translationSubtitles = []
+                    callScreenState.translationEnabled = callScreenState.translationEnabled.flatMap { _ in false }
+                }
             }
             self.callScreen.update(
                 size: layout.size,
@@ -1120,5 +1165,150 @@ final class AdaptedCallVideoSource: VideoSource {
     
     deinit {
         self.videoFrameDisposable?.dispose()
+    }
+}
+
+// MARK: Swiftgram
+extension CallControllerNodeV2 {
+    private var sgAccountId: Int64 {
+        return self.call.context.account.peerId.id._internalGetInt64Value()
+    }
+    
+    private var sgPeerId: Int64 {
+        return self.call.peerId.id._internalGetInt64Value()
+    }
+    
+    /// Turn live translation on or off and remember the choice for this contact.
+    func sgSetTranslationEnabled(_ enabled: Bool) {
+        SGSimpleSettings.shared.setCallTranslationEnabled(enabled, accountId: self.sgAccountId, peerId: self.sgPeerId)
+        self.sgTranslationIsEnabled = enabled
+        
+        if enabled {
+            self.sgStartTranslation()
+        } else {
+            self.sgStopTranslation()
+        }
+        
+        if var callScreenState = self.callScreenState, callScreenState.translationEnabled != nil {
+            callScreenState.translationEnabled = enabled
+            if !enabled {
+                callScreenState.translationSubtitles = []
+            }
+            self.callScreenState = callScreenState
+            self.update(transition: .animated(duration: 0.3, curve: .spring))
+        }
+    }
+    
+    private func sgStartTranslation() {
+        guard let targetLanguage = SGSimpleSettings.shared.resolvedCallTranslationTargetLanguage(accountId: self.sgAccountId, peerId: self.sgPeerId) else {
+            return
+        }
+        
+        let session: SGCallTranslationSession
+        if let existing = self.sgTranslationSession {
+            session = existing
+        } else {
+            session = SGCallTranslationSession(account: self.call.context.account, peerId: self.call.peerId)
+            session.onSubtitlesChanged = { [weak self] lines in
+                // The renderer is what the remote party actually sees; the
+                // screen state only drives the button.
+                OngoingCallContext.setTranslationSubtitles(lines)
+                guard let self, var callScreenState = self.callScreenState else {
+                    return
+                }
+                callScreenState.translationSubtitles = lines
+                self.callScreenState = callScreenState
+                self.update(transition: .immediate)
+            }
+            self.sgTranslationSession = session
+        }
+        
+        session.setEnabled(true, targetLanguage: targetLanguage)
+        
+        // Feed the session from the call's own microphone stream. A separate
+        // AVAudioSession cannot be opened alongside an active call — WebRTC owns
+        // the input route — so this taps the audio device the call already has.
+        if let call = self.call as? PresentationCallImpl, let audioDevice = call.sharedAudioContext?.audioDevice {
+            audioDevice.setMicrophoneDataSink { [weak session] samples, sampleCount, channels, sampleRate in
+                session?.appendAudio(samples: samples, sampleCount: sampleCount, channels: channels, sampleRate: sampleRate)
+            }
+        }
+    }
+    
+    /// Detach from the call and clear global subtitle state. Safe to call twice.
+    func sgTearDownTranslation() {
+        if let call = self.call as? PresentationCallImpl, let audioDevice = call.sharedAudioContext?.audioDevice {
+            audioDevice.setMicrophoneDataSink(nil)
+        }
+        self.sgTranslationSession?.setEnabled(false, targetLanguage: nil)
+        self.sgTranslationSession = nil
+        self.sgTranslationIsEnabled = false
+        OngoingCallContext.setTranslationSubtitles([])
+    }
+    
+    private func sgStopTranslation() {
+        if let call = self.call as? PresentationCallImpl, let audioDevice = call.sharedAudioContext?.audioDevice {
+            audioDevice.setMicrophoneDataSink(nil)
+        }
+        self.sgTranslationSession?.setEnabled(false, targetLanguage: nil)
+        OngoingCallContext.setTranslationSubtitles([])
+    }
+    
+    /// Long-pressing the translate button opens this.
+    ///
+    /// An action sheet rather than a context menu: the call screen's buttons are
+    /// private to the CallScreen module, so a context menu would need an anchor
+    /// view plumbed out of it, while an action sheet needs no anchor and is
+    /// already the pattern used for the audio-route picker on this same screen.
+    func sgPresentTranslationMenu() {
+        let presentationData = self.sharedContext.currentPresentationData.with { $0 }
+        let strings = presentationData.strings
+        
+        var items: [ActionSheetItem] = []
+        
+        let currentTarget = SGSimpleSettings.shared.resolvedCallTranslationTargetLanguage(accountId: self.sgAccountId, peerId: self.sgPeerId)
+        
+        items.append(ActionSheetTextItem(title: "Translate your speech into the language shown, and burn it into the video the other person sees."))
+        
+        items.append(ActionSheetButtonItem(title: self.sgTranslationIsEnabled ? "Turn Translation Off" : "Turn Translation On", action: { [weak self] in
+            self?.sgDismissActionSheet()
+            guard let self else {
+                return
+            }
+            self.sgSetTranslationEnabled(!self.sgTranslationIsEnabled)
+        }))
+        
+        for language in SGCallTranslationSession.offeredLanguages(preferred: currentTarget) {
+            let isSelected = SGCallTranslationSession.languagesMatch(currentTarget, language.code)
+            items.append(ActionSheetButtonItem(title: isSelected ? "\(language.title) ✓" : language.title, action: { [weak self] in
+                self?.sgDismissActionSheet()
+                guard let self else {
+                    return
+                }
+                SGSimpleSettings.shared.setCallTranslationTargetLanguage(language.code, accountId: self.sgAccountId, peerId: self.sgPeerId)
+                // Restart so the new target applies to the next utterance.
+                if self.sgTranslationIsEnabled {
+                    self.sgTranslationSession?.setEnabled(false, targetLanguage: nil)
+                    self.sgStartTranslation()
+                }
+            }))
+        }
+        
+        let actionSheet = ActionSheetController(presentationData: presentationData.withUpdated(theme: defaultDarkPresentationTheme))
+        self.sgActionSheet = actionSheet
+        actionSheet.setItemGroups([
+            ActionSheetItemGroup(items: items),
+            ActionSheetItemGroup(items: [
+                ActionSheetButtonItem(title: strings.Common_Cancel, color: .accent, font: .bold, action: { [weak self] in
+                    self?.sgDismissActionSheet()
+                })
+            ])
+        ])
+        self.present?(actionSheet)
+    }
+    
+    private func sgDismissActionSheet() {
+        self.sgActionSheet?.dismissAnimated()
+        self.sgActionSheet = nil
     }
 }

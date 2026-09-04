@@ -1,0 +1,44 @@
+diff --git a/tgcalls/platform/darwin/VideoCameraCapturer.mm b/tgcalls/platform/darwin/VideoCameraCapturer.mm
+index 68af2e6..8e5eb26 100644
+--- a/tgcalls/platform/darwin/VideoCameraCapturer.mm
++++ b/tgcalls/platform/darwin/VideoCameraCapturer.mm
+@@ -1,6 +1,8 @@
+ #include "VideoCameraCapturer.h"
+ 
+ #import <AVFoundation/AVFoundation.h>
++// MARK: Swiftgram
++#import <TgVoipWebrtc/SGCallSubtitleRenderer.h>
+ 
+ #include "rtc_base/logging.h"
+ #import "base/RTCLogging.h"
+@@ -660,6 +662,30 @@ - (void)captureOutput:(AVCaptureOutput *)captureOutput
+ 
+     auto i420Buffer = [self prepareI420Buffer:[rtcPixelBuffer pixelBuffer]];
+     
++    // MARK: Swiftgram
++    // Burn live-translation subtitles into the outgoing frame.
++    //
++    // This has to happen here, in the capture path, rather than as an overlay on
++    // the local call screen: the person who needs to read the translation is the
++    // one on the other end. Drawing it locally would show it only to the person
++    // who does not need it.
++    //
++    // prepareI420Buffer either returns nullptr or the I420Buffer it allocated,
++    // so the cast is safe, and the buffer is ours alone at this point — nothing
++    // else holds a reference yet.
++    if (i420Buffer && [[SGCallSubtitleRenderer shared] hasContent]) {
++        auto *mutableBuffer = static_cast<webrtc::I420Buffer *>(i420Buffer.get());
++        [[SGCallSubtitleRenderer shared] blendIntoY:mutableBuffer->MutableDataY()
++                                            strideY:mutableBuffer->StrideY()
++                                                  u:mutableBuffer->MutableDataU()
++                                            strideU:mutableBuffer->StrideU()
++                                                  v:mutableBuffer->MutableDataV()
++                                            strideV:mutableBuffer->StrideV()
++                                              width:mutableBuffer->width()
++                                             height:mutableBuffer->height()
++                                           rotation:(int)rotation];
++    }
++    
+     if (!_isPaused && i420Buffer) {
+         auto videoFrame = webrtc::VideoFrame::Builder()
+             .set_video_frame_buffer(i420Buffer)

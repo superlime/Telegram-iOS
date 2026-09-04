@@ -878,6 +878,17 @@ public final class OngoingCallContext {
     public static func setupAudioSession() {
         OngoingCallThreadLocalContextWebrtc.setupAudioSession()
     }
+
+    // MARK: Swiftgram
+    /// Set the subtitles burned into the outgoing video, oldest line first.
+    ///
+    /// Routed through here so the call UI does not need to depend on
+    /// TgVoipWebrtc directly. The underlying renderer is process-wide: there is
+    /// only ever one outgoing camera stream, and callers are responsible for
+    /// clearing it when their call ends.
+    public static func setTranslationSubtitles(_ lines: [String]) {
+        SGCallSubtitleRenderer.shared.setLines(lines)
+    }
     
     public let callId: CallId
     public let internalId: CallSessionInternalId

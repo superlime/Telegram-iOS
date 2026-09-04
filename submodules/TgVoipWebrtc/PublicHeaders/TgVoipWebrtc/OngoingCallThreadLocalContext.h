@@ -61,6 +61,19 @@
 
 - (void)setTone:(CallAudioTone * _Nullable)tone;
 
+// MARK: Swiftgram
+// Receive microphone PCM for live call translation.
+//
+// The block is invoked on the realtime audio thread roughly every 10 ms with
+// interleaved 16-bit signed samples. `sampleCount` counts frames, not bytes:
+// the buffer is sampleCount * channels * 2 bytes long. Do only a copy-and-
+// enqueue here — anything slower will glitch the call audio.
+//
+// Audio arrives echo-cancelled by the VoiceProcessingIO unit (so the remote
+// party's voice is not fed back in) but before WebRTC's noise suppression and
+// AGC. Pass nil to detach.
+- (void)setMicrophoneDataSink:(void (^ _Nullable)(const void * _Nonnull samples, NSUInteger sampleCount, NSUInteger channels, int32_t sampleRate))sink;
+
 @end
 
 @interface OngoingCallConnectionDescriptionWebrtc : NSObject

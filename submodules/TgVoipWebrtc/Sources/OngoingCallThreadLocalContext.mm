@@ -168,6 +168,22 @@ public:
         _mutex.Unlock();
     }
     
+    // MARK: Swiftgram
+    // Live-translation tap. The iOS ADM hands us microphone PCM here on its
+    // realtime audio thread, already echo-cancelled by the VoiceProcessingIO
+    // unit but *before* WebRTC's APM applies noise suppression and AGC — which
+    // is what we want for speech recognition, since NS/AGC are tuned for human
+    // intelligibility rather than transcription accuracy.
+    //
+    // The sink is invoked under _mutex, matching how _audioTransports are
+    // dispatched below. It must do nothing but copy and enqueue: it runs on the
+    // audio thread with a 10 ms deadline.
+    void SetRecordedDataSink(void (^ _Nullable sink)(const void *, size_t, size_t, uint32_t)) {
+        _mutex.Lock();
+        _recordedDataSink = sink;
+        _mutex.Unlock();
+    }
+
     void UpdateAudioCallbackIsActive(webrtc::AudioTransport *audioCallback, bool isActive) {
         _mutex.Lock();
         
@@ -488,6 +504,10 @@ public:
         uint32_t& newMicLevel
     ) override {
         _mutex.Lock();
+        // MARK: Swiftgram — live-translation tap, see SetRecordedDataSink.
+        if (_recordedDataSink) {
+            _recordedDataSink(audioSamples, nSamples, nChannels, samplesPerSec);
+        }
         if (!_audioTransports.empty()) {
             for (size_t i = 0; i < _audioTransports.size(); i++) {
                 _audioTransports[i].first->RecordedDataIsAvailable(
@@ -522,6 +542,10 @@ public:
         absl::optional<int64_t> estimatedCaptureTimeNS
     ) override {
         _mutex.Lock();
+        // MARK: Swiftgram — live-translation tap, see SetRecordedDataSink.
+        if (_recordedDataSink) {
+            _recordedDataSink(audioSamples, nSamples, nChannels, samplesPerSec);
+        }
         if (!_audioTransports.empty()) {
             for (size_t i = 0; i < _audioTransports.size(); i++) {
                 _audioTransports[i].first->RecordedDataIsAvailable(
@@ -697,6 +721,8 @@ private:
     std::vector<std::pair<webrtc::AudioTransport *, bool>> _audioTransports;
     webrtc::Mutex _mutex;
     std::vector<int16_t> _mixAudioSamples;
+    // MARK: Swiftgram
+    void (^_recordedDataSink)(const void *, size_t, size_t, uint32_t) = nil;
 };
 
 class WrappedChildAudioDeviceModule : public tgcalls::DefaultWrappedAudioDeviceModule {
@@ -810,6 +836,24 @@ private:
 
 - (std::shared_ptr<tgcalls::ThreadLocalObject<tgcalls::SharedAudioDeviceModule>>)getAudioDeviceModule {
     return _audioDeviceModule;
+}
+
+// MARK: Swiftgram
+- (void)setMicrophoneDataSink:(void (^ _Nullable)(const void * _Nonnull, NSUInteger, NSUInteger, int32_t))sink {
+    #ifdef WEBRTC_IOS
+    id sinkCopy = [sink copy];
+    _audioDeviceModule->perform([sinkCopy](tgcalls::SharedAudioDeviceModule *audioDeviceModule) {
+        WrappedAudioDeviceModuleIOS *deviceModule = (WrappedAudioDeviceModuleIOS *)audioDeviceModule->audioDeviceModule().get();
+        if (sinkCopy == nil) {
+            deviceModule->SetRecordedDataSink(nil);
+            return;
+        }
+        void (^typedSink)(const void *, NSUInteger, NSUInteger, int32_t) = sinkCopy;
+        deviceModule->SetRecordedDataSink(^(const void *samples, size_t sampleCount, size_t channels, uint32_t sampleRate) {
+            typedSink(samples, (NSUInteger)sampleCount, (NSUInteger)channels, (int32_t)sampleRate);
+        });
+    });
+    #endif
 }
 
 + (void)setupAudioSession {

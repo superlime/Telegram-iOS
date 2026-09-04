@@ -849,6 +849,30 @@ public final class OngoingCallContext {
                 CallAudioTone(samples: tone.samples, sampleRate: tone.sampleRate, loopCount: tone.loopCount)
             })
         }
+
+        // MARK: Swiftgram
+        /// Observe microphone PCM for live call translation.
+        ///
+        /// `sink` is called on the realtime audio thread about every 10 ms with
+        /// interleaved 16-bit signed samples. `sampleCount` is frames, so the
+        /// buffer holds `sampleCount * channels` Int16 values. The pointer is
+        /// only valid for the duration of the call — copy what you need and
+        /// return immediately; blocking here glitches the call.
+        ///
+        /// Audio is echo-cancelled (the remote party's voice is already removed,
+        /// so speakerphone does not feed back into recognition) but has not yet
+        /// been through WebRTC's noise suppression or AGC.
+        ///
+        /// Pass nil to detach.
+        public func setMicrophoneDataSink(_ sink: ((UnsafePointer<Int16>, Int, Int, Int32) -> Void)?) {
+            guard let sink = sink else {
+                self.impl.setMicrophoneDataSink(nil)
+                return
+            }
+            self.impl.setMicrophoneDataSink { samples, sampleCount, channels, sampleRate in
+                sink(samples.assumingMemoryBound(to: Int16.self), Int(sampleCount), Int(channels), sampleRate)
+            }
+        }
     }
     
     public static func setupAudioSession() {

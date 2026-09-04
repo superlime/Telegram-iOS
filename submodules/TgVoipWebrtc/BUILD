@@ -36,6 +36,9 @@ sources = glob([
     "tgcalls/tgcalls/platform/darwin/SQueue*",
     "tgcalls/tgcalls/platform/darwin/macOS/**",
     "tgcalls/tgcalls/platform/darwin/VideoCameraCapturerMac.*",
+    # MARK: Swiftgram — replaced by the vendored copy in Sources/, which
+    # adds the live-translation subtitle blend. See that file for why.
+    "tgcalls/tgcalls/platform/darwin/VideoCameraCapturer.mm",
     "tgcalls/tgcalls/platform/darwin/VideoMetalViewMac.*",
     "tgcalls/tgcalls/platform/darwin/VideoSampleBufferViewMac.*",
     "tgcalls/tgcalls/platform/darwin/GLVideoView.*",
@@ -72,6 +75,9 @@ sources = glob([
     "tgcalls/tgcalls/platform/darwin/SQueue*",
     "tgcalls/tgcalls/platform/darwin/macOS/**",
     "tgcalls/tgcalls/platform/darwin/VideoCameraCapturerMac.*",
+    # MARK: Swiftgram — replaced by the vendored copy in Sources/, which
+    # adds the live-translation subtitle blend. See that file for why.
+    "tgcalls/tgcalls/platform/darwin/VideoCameraCapturer.mm",
     "tgcalls/tgcalls/platform/darwin/VideoMetalViewMac.*",
     "tgcalls/tgcalls/platform/darwin/VideoSampleBufferViewMac.*",
     "tgcalls/tgcalls/platform/darwin/GLVideoView.*",
@@ -146,6 +152,14 @@ objc_library(
     ]),
     copts = [
         "-I{}/tgcalls/tgcalls".format(package_name()),
+        # MARK: Swiftgram
+        # The vendored VideoCameraCapturer.mm lives in Sources/ but its quoted
+        # includes ("VideoCameraCapturer.h", "TGRTCCVPixelBuffer.h", ...) were
+        # written to resolve relative to platform/darwin/. Putting that
+        # directory on the include path keeps the vendored copy byte-identical
+        # to upstream apart from the subtitle blend, instead of rewriting every
+        # include and making future re-syncs harder.
+        "-I{}/tgcalls/tgcalls/platform/darwin".format(package_name()),
         "-Ithird-party/webrtc/webrtc",
         "-Ithird-party/webrtc/dependencies",
         "-Ithird-party/webrtc/webrtc/sdk/objc",
@@ -270,6 +284,14 @@ cc_library(
     ],
     copts = [
         "-I{}/tgcalls/tgcalls".format(package_name()),
+        # MARK: Swiftgram
+        # The vendored VideoCameraCapturer.mm lives in Sources/ but its quoted
+        # includes ("VideoCameraCapturer.h", "TGRTCCVPixelBuffer.h", ...) were
+        # written to resolve relative to platform/darwin/. Putting that
+        # directory on the include path keeps the vendored copy byte-identical
+        # to upstream apart from the subtitle blend, instead of rewriting every
+        # include and making future re-syncs harder.
+        "-I{}/tgcalls/tgcalls/platform/darwin".format(package_name()),
         "-Ithird-party/webrtc/webrtc",
         "-Ithird-party/webrtc/dependencies",
         "-Ithird-party/webrtc/absl",

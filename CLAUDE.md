@@ -483,6 +483,65 @@ Do **not** add opt-in `EngineMediaResource` overloads alongside raw-`MediaResour
 
 For consumer modules, prefer `EngineMediaResource` as the type in properties, locals, generic arguments and function parameters when the usage is a pure type reference. Do **not** try to use `EngineMediaResource` where a class must conform to `TelegramMediaResource` (Postbox protocol) or override `isEqual(to: MediaResource)` — those remain `import Postbox`.
 
+## Live call translation
+
+Speaking on a call is transcribed, translated, sent to the chat as one message
+per utterance, and burned into the outgoing video as subtitles the *remote*
+party reads.
+
+Pipeline, in order:
+
+| Stage | Where |
+|---|---|
+| Mic PCM out of WebRTC | `SharedCallAudioDevice.setMicrophoneDataSink` (`TgVoipWebrtc`), surfaced as `OngoingCallContext.AudioDevice.setMicrophoneDataSink` |
+| Speech gate, framing | `SGModulateAudioFrontEnd` |
+| Transcription | `SGModulateSTT` — Modulate velma-2 streaming |
+| Translation | `openAILunaCallTranslate` in `SGOpenAILunaTranslate` |
+| Orchestration, chat message | `SGCallTranslation` |
+| Subtitle raster + I420 blend | `SGCallSubtitleRenderer` (`TgVoipWebrtc`) |
+| Button and menu | `PrivateCallScreen` + `CallControllerNodeV2` |
+
+Things that will bite you:
+
+- **Mic audio must come from the ADM tap, not a new `AVAudioSession`.** WebRTC
+  owns the input route during a call. The tap point is also deliberate: it is
+  after the VoiceProcessingIO unit's echo cancellation (without which the remote
+  party's voice is transcribed as yours on speakerphone) but before WebRTC's
+  noise suppression and AGC, which are tuned for human ears rather than for a
+  recogniser.
+- **Modulate's audio format goes in the query string**, not the JSON config
+  frame — `audio_format=s16le&sample_rate=...&num_channels=...`. Putting it in
+  the config frame handshakes fine then rejects every audio frame with
+  `Invalid input audio`. The error field is `error`, not `message`, and the
+  language hint is ISO 639-1, not BCP 47.
+- **`finish()` must drain.** The last utterance is emitted *after* the server
+  sees end-of-stream; closing immediately silently drops whatever was just said.
+- **The 80 Hz high-pass filter is off on purpose.** Measured against the live
+  API: rumble at 2.5x speech RMS costs 0.0% WER with the filter off, and the
+  filter changes broadband-noise WER by 0.0 points. See the commit message on
+  `SGModulateSTT` for the table.
+- **Subtitles are pre-rotation.** The frame buffer is stored before the
+  viewer's rotation is applied, so text must be drawn through the inverse or it
+  appears sideways/upside down on the other end. Verify by rendering synthetic
+  I420 to PNG and re-applying the rotation — that is how the transposed 90/270
+  mapping was caught.
+
+### The vendored VideoCameraCapturer
+
+`submodules/TgVoipWebrtc/Sources/VideoCameraCapturer.mm` is a **copy** of the
+tgcalls file, which is excluded from the glob in `submodules/TgVoipWebrtc/BUILD`.
+
+It exists because the subtitle blend belongs in the capture path, and the
+`tgcalls` submodule points at `TelegramMessenger/tgcalls`, which we cannot push
+to — editing in place would pin the submodule to a commit that exists on one
+machine only and break a fresh clone.
+
+The copy is upstream byte-for-byte apart from ~26 lines marked `MARK:
+Swiftgram`. **After a tgcalls update:** re-copy the upstream file, re-apply
+`Swiftgram/patches/tgcalls-subtitle-burn-in.patch`, and update the commit SHA in
+the banner at the top. `platform/darwin` is on the include path so the copy's
+quoted includes resolve unchanged.
+
 ## tgcalls Testbench
 
 This repo includes a tgcalls testbench (CLI tool, Go/Pion SFU, Docker build) layered on top of the iOS source. All testbench code, build instructions, and architecture docs live inside the tgcalls submodule:

@@ -110,6 +110,10 @@ public class SGSimpleSettings {
         case disableSwipeToRecordStory
         case quickTranslateButton
         case outgoingLanguageTranslation
+        // MARK: Swiftgram — per-contact call translation
+        case contactNativeLanguage
+        case callTranslationTargetLanguage
+        case callTranslationEnabled
         case hideReactions
         case showRepostToStory
         case showRepostToStoryV2
@@ -281,6 +285,9 @@ public class SGSimpleSettings {
         Keys.disableSwipeToRecordStory.rawValue: false,
         Keys.quickTranslateButton.rawValue: false,
         Keys.outgoingLanguageTranslation.rawValue: [:],
+        Keys.contactNativeLanguage.rawValue: [:],
+        Keys.callTranslationTargetLanguage.rawValue: [:],
+        Keys.callTranslationEnabled.rawValue: [:],
         Keys.hideReactions.rawValue: false,
         Keys.showRepostToStory.rawValue: true,
         Keys.contextShowSelectFromUser.rawValue: true,
@@ -412,6 +419,25 @@ public class SGSimpleSettings {
     public var quickTranslateButton: Bool
     
     public var outgoingLanguageTranslation = UserDefaultsBackedDictionary<String, String>(userDefaultsKey: Keys.outgoingLanguageTranslation.rawValue, threadSafe: false)
+
+    // MARK: Swiftgram
+    // The language the contact actually speaks, as an IETF BCP 47 tag ("pt-BR",
+    // "es", "zh-Hans"). Set by hand from the contact's info screen; there is no
+    // reliable way to learn it from Telegram — `Api.User.langCode` is the
+    // client's *interface* language and is discarded by TelegramCore anyway.
+    // Keyed by makeContactLanguageKey(accountId:peerId:).
+    public var contactNativeLanguage = UserDefaultsBackedDictionary<String, String>(userDefaultsKey: Keys.contactNativeLanguage.rawValue, threadSafe: true)
+
+    // MARK: Swiftgram
+    // Explicit per-contact override of the call-translation target language.
+    // Absent means "follow contactNativeLanguage"; once the user picks a
+    // language from the in-call menu we record it here so it survives the call.
+    public var callTranslationTargetLanguage = UserDefaultsBackedDictionary<String, String>(userDefaultsKey: Keys.callTranslationTargetLanguage.rawValue, threadSafe: true)
+
+    // MARK: Swiftgram
+    // Whether live call translation is on for this contact. Absent means off:
+    // translation is opt-in per contact, and the choice is remembered.
+    public var callTranslationEnabled = UserDefaultsBackedDictionary<String, Bool>(userDefaultsKey: Keys.callTranslationEnabled.rawValue, threadSafe: true)
     
     @UserDefault(key: Keys.hideReactions.rawValue)
     public var hideReactions: Bool
@@ -617,6 +643,73 @@ extension SGSimpleSettings {
     
     public static func makeOutgoingLanguageTranslationKey(accountId: Int64, peerId: Int64) -> String {
         return "\(accountId):\(peerId)"
+    }
+
+    // MARK: Swiftgram
+    // Shares the "accountId:peerId" shape with the outgoing-translation key, but
+    // is deliberately a separate function: these settings live in their own
+    // dictionaries and should not silently inherit each other's key format if
+    // one of them ever changes.
+    public static func makeContactLanguageKey(accountId: Int64, peerId: Int64) -> String {
+        return "\(accountId):\(peerId)"
+    }
+}
+
+// MARK: Swiftgram — per-contact call translation
+extension SGSimpleSettings {
+    /// The contact's native language as an IETF BCP 47 tag, or nil if unset.
+    public func contactNativeLanguageCode(accountId: Int64, peerId: Int64) -> String? {
+        let key = SGSimpleSettings.makeContactLanguageKey(accountId: accountId, peerId: peerId)
+        guard let value = self.contactNativeLanguage[key], !value.isEmpty else {
+            return nil
+        }
+        return value
+    }
+
+    public func setContactNativeLanguage(_ language: String?, accountId: Int64, peerId: Int64) {
+        let key = SGSimpleSettings.makeContactLanguageKey(accountId: accountId, peerId: peerId)
+        if let language = language, !language.isEmpty {
+            self.contactNativeLanguage[key] = language
+        } else {
+            self.contactNativeLanguage[key] = nil
+        }
+    }
+
+    /// The language calls with this contact are translated *into*.
+    ///
+    /// An explicit in-call choice wins; otherwise we fall back to the contact's
+    /// native language. Returns nil when neither is known, which callers treat
+    /// as "translation cannot run yet" rather than guessing a language.
+    public func resolvedCallTranslationTargetLanguage(accountId: Int64, peerId: Int64) -> String? {
+        let key = SGSimpleSettings.makeContactLanguageKey(accountId: accountId, peerId: peerId)
+        if let override = self.callTranslationTargetLanguage[key], !override.isEmpty {
+            return override
+        }
+        return self.contactNativeLanguageCode(accountId: accountId, peerId: peerId)
+    }
+
+    /// Records an explicit target-language choice. Passing nil clears the
+    /// override so the contact's native language takes over again.
+    public func setCallTranslationTargetLanguage(_ language: String?, accountId: Int64, peerId: Int64) {
+        let key = SGSimpleSettings.makeContactLanguageKey(accountId: accountId, peerId: peerId)
+        if let language = language, !language.isEmpty {
+            self.callTranslationTargetLanguage[key] = language
+        } else {
+            self.callTranslationTargetLanguage[key] = nil
+        }
+    }
+
+    /// Whether live translation is enabled for calls with this contact.
+    /// Defaults to false: translation streams audio to a third party, so it
+    /// never turns itself on.
+    public func isCallTranslationEnabled(accountId: Int64, peerId: Int64) -> Bool {
+        let key = SGSimpleSettings.makeContactLanguageKey(accountId: accountId, peerId: peerId)
+        return self.callTranslationEnabled[key] ?? false
+    }
+
+    public func setCallTranslationEnabled(_ enabled: Bool, accountId: Int64, peerId: Int64) {
+        let key = SGSimpleSettings.makeContactLanguageKey(accountId: accountId, peerId: peerId)
+        self.callTranslationEnabled[key] = enabled
     }
 }
 

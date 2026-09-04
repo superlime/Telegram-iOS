@@ -96,6 +96,7 @@ tools/sim-watcher/dist/
 # history; copy SGAzureTranslateCredentials.swift.template into Sources/ instead.
 Swiftgram/SGAzureTranslate/Sources/SGAzureTranslateCredentials.swift
 Swiftgram/SGOpenAITranslate/Sources/SGOpenAITranslateCredentials.swift
+Swiftgram/SGModulateSTT/Sources/SGModulateSTTCredentials.swift
 # App Store Connect API private keys
 build-system/AuthKey_*.p8
 # Development provisioning profiles are generated per-device by

@@ -1235,7 +1235,11 @@ extension CallControllerNodeV2 {
             self.sgTranslationSession = session
         }
         
-        session.setEnabled(true, targetLanguage: targetLanguage)
+        // The user's own reading language, used when the speaker turns out to
+        // be speaking the target language already — see the session's
+        // resolveTranslationTarget.
+        let userLanguage = self.sharedContext.currentPresentationData.with({ $0 }).strings.baseLanguageCode
+        session.setEnabled(true, targetLanguage: targetLanguage, userLanguage: userLanguage)
         
         // Feed the session from the call's own microphone stream. A separate
         // AVAudioSession cannot be opened alongside an active call — WebRTC owns
@@ -1252,7 +1256,7 @@ extension CallControllerNodeV2 {
         if let call = self.call as? PresentationCallImpl, let audioDevice = call.sharedAudioContext?.audioDevice {
             audioDevice.setMicrophoneDataSink(nil)
         }
-        self.sgTranslationSession?.setEnabled(false, targetLanguage: nil)
+        self.sgTranslationSession?.setEnabled(false, targetLanguage: nil, userLanguage: nil)
         self.sgTranslationSession = nil
         self.sgTranslationIsEnabled = false
         OngoingCallContext.setTranslationSubtitles([])
@@ -1262,7 +1266,7 @@ extension CallControllerNodeV2 {
         if let call = self.call as? PresentationCallImpl, let audioDevice = call.sharedAudioContext?.audioDevice {
             audioDevice.setMicrophoneDataSink(nil)
         }
-        self.sgTranslationSession?.setEnabled(false, targetLanguage: nil)
+        self.sgTranslationSession?.setEnabled(false, targetLanguage: nil, userLanguage: nil)
         OngoingCallContext.setTranslationSubtitles([])
     }
     
@@ -1304,7 +1308,7 @@ extension CallControllerNodeV2 {
                 SGSimpleSettings.shared.setCallTranslationTargetLanguage(language.code, accountId: self.sgAccountId, peerId: self.sgPeerId)
                 if self.sgTranslationIsEnabled {
                     // Restart so the new target applies to the next utterance.
-                    self.sgTranslationSession?.setEnabled(false, targetLanguage: nil)
+                    self.sgTranslationSession?.setEnabled(false, targetLanguage: nil, userLanguage: nil)
                     self.sgStartTranslation()
                 } else {
                     // Picking a language is the intent to use it — otherwise the

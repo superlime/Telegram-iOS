@@ -26,6 +26,10 @@ public struct SGModulateUtterance: Equatable {
     public let speaker: String?
     public let emotion: String?
     public let accent: String?
+    /// Seconds between the speaker finishing this utterance and the transcript
+    /// arriving. nil when the audio could not be located on the wall clock —
+    /// see `SGModulateSTTSession.wallClock(forStreamMs:)`.
+    public let recognitionLatency: Double?
 
     public init(
         uuid: String,
@@ -35,7 +39,8 @@ public struct SGModulateUtterance: Equatable {
         language: String?,
         speaker: String?,
         emotion: String?,
-        accent: String?
+        accent: String?,
+        recognitionLatency: Double? = nil
     ) {
         self.uuid = uuid
         self.text = text
@@ -45,6 +50,19 @@ public struct SGModulateUtterance: Equatable {
         self.speaker = speaker
         self.emotion = emotion
         self.accent = accent
+        self.recognitionLatency = recognitionLatency
+    }
+
+    /// The diarisation label as a number, when it is one.
+    ///
+    /// The tap is the local microphone, so the first speaker the model hears is
+    /// the person holding the phone. Callers use this to tell "me" from someone
+    /// else in the room picked up through the same mic.
+    public var speakerNumber: Int? {
+        guard let speaker = self.speaker else {
+            return nil
+        }
+        return Int(speaker.trimmingCharacters(in: .whitespaces))
     }
 
     /// Human-readable summary of the detected signals, for the chat message.
@@ -59,9 +77,8 @@ public struct SGModulateUtterance: Equatable {
         if let emotion = self.emotion, !emotion.isEmpty {
             parts.append("emotion: \(emotion)")
         }
-        if let speaker = self.speaker, !speaker.isEmpty {
-            parts.append("speaker: \(speaker)")
-        }
+        // Speaker is deliberately absent: it is surfaced as the message header
+        // instead, and repeating it here read as noise.
         return parts.joined(separator: ", ")
     }
 }
@@ -90,6 +107,22 @@ public final class SGModulateSTTSession {
     /// Hint passed to the model; nil means "detect".
     private let languageHint: String?
 
+    // Stream-time to wall-clock ledger.
+    //
+    // The model reports utterance boundaries as offsets into the audio *it was
+    // sent*, and the VAD in front of us drops silence, so stream time runs
+    // slower than the clock and by a varying amount. Latency measured against
+    // stream time would therefore be wrong, and wrong in the flattering
+    // direction. Instead we record, for each frame submitted, how much audio
+    // had been sent by then and when that happened; an utterance's end offset
+    // is then looked up to find the moment it was actually spoken.
+    private var submittedMs: Double = 0.0
+    private var streamClock: [(streamMs: Double, wallClock: Double)] = []
+    /// ~10 minutes of 100 ms frames. Bounded so a long call cannot grow this
+    /// without limit; older entries can be dropped because an utterance is
+    /// reported within seconds of being spoken.
+    private static let streamClockCapacity: Int = 6000
+
     public init(languageHint: String? = nil) {
         self.languageHint = languageHint
     }
@@ -105,6 +138,10 @@ public final class SGModulateSTTSession {
 
     /// Enqueue mono 16-bit PCM. Safe to call from any thread.
     public func append(pcm: Data, sampleRate: Int32) {
+        // Sampled here rather than on the queue: this is the moment the audio
+        // reached us, and the queue hop would fold scheduling delay into every
+        // latency figure we report.
+        let capturedAt = CFAbsoluteTimeGetCurrent()
         sgModulateQueue.async { [weak self] in
             guard let self = self, self.isStarted, !self.isFinished else {
                 return
@@ -116,8 +153,33 @@ public final class SGModulateSTTSession {
             guard let task = self.task else {
                 return
             }
+            if sampleRate > 0 {
+                // 16-bit mono: two bytes per sample.
+                self.submittedMs += Double(pcm.count) / 2.0 / Double(sampleRate) * 1000.0
+                self.streamClock.append((streamMs: self.submittedMs, wallClock: capturedAt))
+                if self.streamClock.count > SGModulateSTTSession.streamClockCapacity {
+                    self.streamClock.removeFirst(self.streamClock.count - SGModulateSTTSession.streamClockCapacity)
+                }
+            }
             task.send(.data(pcm)) { _ in }
         }
+    }
+
+    /// When, on the wall clock, the stream had carried `streamMs` of audio.
+    ///
+    /// Returns nil when the offset predates the retained ledger, which would
+    /// otherwise produce a fabricated latency. Callers show nothing rather than
+    /// a number they cannot stand behind.
+    func wallClock(forStreamMs streamMs: Double) -> Double? {
+        guard let first = self.streamClock.first, streamMs >= first.streamMs else {
+            return nil
+        }
+        // Ledger is ascending; the first entry at or past the offset is the
+        // frame that carried it.
+        for entry in self.streamClock where entry.streamMs >= streamMs {
+            return entry.wallClock
+        }
+        return self.streamClock.last?.wallClock
     }
 
     /// Signal end-of-stream and keep reading until the model has flushed.
@@ -253,15 +315,24 @@ public final class SGModulateSTTSession {
             guard let payload = object["utterance"] as? [String: Any] else {
                 return
             }
+            let startMs = payload["start_ms"] as? Int ?? 0
+            let durationMs = payload["duration_ms"] as? Int ?? 0
+            // Measured from the END of the utterance: that is the earliest
+            // moment a transcript of it could possibly exist.
+            var latency: Double? = nil
+            if let spokenAt = self.wallClock(forStreamMs: Double(startMs + durationMs)) {
+                latency = max(0.0, CFAbsoluteTimeGetCurrent() - spokenAt)
+            }
             let utterance = SGModulateUtterance(
                 uuid: payload["utterance_uuid"] as? String ?? UUID().uuidString,
                 text: (payload["text"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines),
-                startMs: payload["start_ms"] as? Int ?? 0,
-                durationMs: payload["duration_ms"] as? Int ?? 0,
+                startMs: startMs,
+                durationMs: durationMs,
                 language: payload["language"] as? String,
                 speaker: sgModulateStringValue(payload["speaker"]),
                 emotion: sgModulateStringValue(payload["emotion"]),
-                accent: sgModulateStringValue(payload["accent"])
+                accent: sgModulateStringValue(payload["accent"]),
+                recognitionLatency: latency
             )
             guard !utterance.text.isEmpty else {
                 return

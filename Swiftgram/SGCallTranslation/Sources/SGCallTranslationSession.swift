@@ -78,6 +78,16 @@ public final class SGCallTranslationSession {
 
     private var isEnabled: Bool = false
     private var targetLanguage: String?
+    /// The language the person holding the phone reads, used when the speaker
+    /// is already speaking the configured target.
+    private var userLanguage: String?
+
+    /// Messages posted but not yet completed with a translation, oldest first.
+    private var messages: [String: SGCallTranslationMessage] = [:]
+    private var messageOrder: [String] = []
+    /// Enough to cover any translation still in flight several times over,
+    /// without letting a long call accumulate these forever.
+    private static let retainedMessageCount: Int = 40
 
     /// Ordered transcript of the call, used as translation context.
     private var previousUtterances: [String] = []
@@ -138,12 +148,36 @@ public final class SGCallTranslationSession {
         return result
     }
 
-    public func setEnabled(_ enabled: Bool, targetLanguage: String?) {
+    /// The language to translate this utterance into, or nil to leave it alone.
+    ///
+    /// Normally that is the configured target. When the speaker is *already*
+    /// speaking the target language, translating to it would be a no-op, so we
+    /// turn the translation around and put it into the language the phone's
+    /// owner reads instead — which is the case where someone else in the room
+    /// answers in the target language and the owner is the one who needs help.
+    ///
+    /// Returns nil only when there is nowhere useful to go: no known language
+    /// for the reader, or the reader already reads what was said.
+    public static func resolveTranslationTarget(detected: String?, target: String, userLanguage: String?) -> String? {
+        if !sgLanguagesMatch(detected, target) {
+            return target
+        }
+        guard let userLanguage = userLanguage, !userLanguage.isEmpty else {
+            return nil
+        }
+        if sgLanguagesMatch(detected, userLanguage) {
+            return nil
+        }
+        return userLanguage
+    }
+
+    public func setEnabled(_ enabled: Bool, targetLanguage: String?, userLanguage: String?) {
         self.queue.async {
-            if enabled == self.isEnabled && targetLanguage == self.targetLanguage {
+            if enabled == self.isEnabled && targetLanguage == self.targetLanguage && userLanguage == self.userLanguage {
                 return
             }
             self.targetLanguage = targetLanguage
+            self.userLanguage = userLanguage
             if enabled {
                 self.startImpl()
             } else {
@@ -218,6 +252,16 @@ public final class SGCallTranslationSession {
         }
         self.disposables.removeAll()
 
+        // Stop chasing edits for messages whose translation will now never
+        // arrive. The posted transcripts stay: they are a record of what was
+        // actually said, and deleting them because the user toggled the feature
+        // off would be worse than leaving them untranslated.
+        for (_, message) in self.messages {
+            message.cancel()
+        }
+        self.messages.removeAll()
+        self.messageOrder.removeAll()
+
         self.sequencer.reset()
         self.previousUtterances.removeAll()
         Queue.mainQueue().async { [weak self] in
@@ -240,37 +284,98 @@ public final class SGCallTranslationSession {
 
         self.sequencer.enqueue(utterance.uuid)
 
-        // An utterance already in the target language is not translated; the
-        // transcription stands on its own.
-        if sgLanguagesMatch(utterance.language, targetLanguage) {
-            self.complete(uuid: utterance.uuid, utterance: utterance, translation: nil)
+        // Post what was said straight away. The translation is seconds behind,
+        // and holding the whole message back for it left the chat lagging the
+        // conversation badly enough to be useless as a live record.
+        self.post(utterance: utterance)
+
+        guard let destination = SGCallTranslationSession.resolveTranslationTarget(
+            detected: utterance.language,
+            target: targetLanguage,
+            userLanguage: self.userLanguage
+        ) else {
+            self.complete(uuid: utterance.uuid, utterance: utterance, translation: nil, destination: nil, translationLatency: nil)
             return
         }
 
+        let submittedAt = CFAbsoluteTimeGetCurrent()
         let disposable = openAILunaCallTranslate(
             utterance.text,
-            to: targetLanguage,
+            to: destination,
             hints: SGCallTranslationHints(language: utterance.language, accent: utterance.accent),
             previousUtterances: context
         ).start(next: { [weak self] translated in
+            let latency = CFAbsoluteTimeGetCurrent() - submittedAt
             self?.queue.async {
-                self?.complete(uuid: utterance.uuid, utterance: utterance, translation: translated)
+                self?.complete(uuid: utterance.uuid, utterance: utterance, translation: translated, destination: destination, translationLatency: latency)
             }
         }, error: { [weak self] _ in
             self?.queue.async {
-                // Publish the transcription anyway. Losing the utterance
-                // entirely because the translator hiccuped is worse than
-                // showing the speaker's own words.
-                self?.complete(uuid: utterance.uuid, utterance: utterance, translation: nil)
+                // The transcript is already posted, so a failed translation
+                // costs the translation only — not the utterance.
+                self?.complete(uuid: utterance.uuid, utterance: utterance, translation: nil, destination: nil, translationLatency: nil)
             }
         })
         self.disposables[utterance.uuid] = disposable
     }
 
-    private func complete(uuid: String, utterance: SGModulateUtterance, translation: String?) {
+    /// Send the transcript-only message and remember it so the translation can
+    /// be edited in.
+    private func post(utterance: SGModulateUtterance) {
+        let body = SGCallMessageFormatter.body(
+            transcription: utterance.text,
+            detectedProperties: utterance.detectedPropertiesDescription,
+            speakerNumber: utterance.speakerNumber,
+            recognitionLatency: utterance.recognitionLatency,
+            translation: nil,
+            translationLanguageName: nil,
+            translationLatency: nil
+        )
+        guard !body.isEmpty else {
+            return
+        }
+        let message = SGCallTranslationMessage(account: self.account, peerId: self.peerId, queue: self.queue)
+        message.send(text: body.text, entities: SGCallTranslationSession.messageEntities(body.entities))
+        self.messages[utterance.uuid] = message
+        self.messageOrder.append(utterance.uuid)
+        self.evictOldMessages()
+    }
+
+    /// Drop references to messages old enough that any edit has long since
+    /// settled. Cancels nothing — these have already been posted.
+    private func evictOldMessages() {
+        while self.messageOrder.count > SGCallTranslationSession.retainedMessageCount {
+            let uuid = self.messageOrder.removeFirst()
+            self.messages.removeValue(forKey: uuid)
+        }
+    }
+
+    private func complete(
+        uuid: String,
+        utterance: SGModulateUtterance,
+        translation: String?,
+        destination: String?,
+        translationLatency: Double?
+    ) {
         self.disposables.removeValue(forKey: uuid)?.dispose()
 
-        self.send(utterance: utterance, translation: translation)
+        // Edit the translation into the message we already posted. Nothing to
+        // do when there is no translation: the transcript stands on its own,
+        // and rewriting it with identical text would only mark it edited.
+        if let translation = translation, !translation.isEmpty, let message = self.messages[uuid] {
+            let body = SGCallMessageFormatter.body(
+                transcription: utterance.text,
+                detectedProperties: utterance.detectedPropertiesDescription,
+                speakerNumber: utterance.speakerNumber,
+                recognitionLatency: utterance.recognitionLatency,
+                translation: translation,
+                translationLanguageName: destination.map { SGCallLanguage.displayName(for: $0) },
+                translationLatency: translationLatency
+            )
+            if !body.isEmpty {
+                message.update(text: body.text, entities: SGCallTranslationSession.messageEntities(body.entities))
+            }
+        }
 
         // Subtitles show the target language, so an untranslated utterance
         // falls back to the speaker's own words rather than showing nothing.
@@ -282,48 +387,15 @@ public final class SGCallTranslationSession {
         }
     }
 
-    private func send(utterance: SGModulateUtterance, translation: String?) {
-        let text: String = SGCallTranslationSession.formatMessage(
-            transcription: utterance.text,
-            detectedProperties: utterance.detectedPropertiesDescription,
-            translation: translation
-        )
-        guard !text.isEmpty else {
-            return
+    /// Bridges the formatter's transport-free entities onto Telegram's.
+    static func messageEntities(_ entities: [SGCallMessageEntity]) -> [MessageTextEntity] {
+        return entities.map { entity in
+            switch entity.kind {
+            case .bold:
+                return MessageTextEntity(range: entity.range, type: .Bold)
+            case .blockQuote:
+                return MessageTextEntity(range: entity.range, type: .BlockQuote(isCollapsed: false))
+            }
         }
-        let _ = enqueueMessages(account: self.account, peerId: self.peerId, messages: [
-            .message(
-                text: text,
-                attributes: [],
-                inlineStickers: [:],
-                mediaReference: nil,
-                threadId: nil,
-                replyToMessageId: nil,
-                replyToStoryId: nil,
-                localGroupingKey: nil,
-                correlationId: nil,
-                bubbleUpEmojiOrStickersets: []
-            )
-        ]).startStandalone()
-    }
-
-    /// Transcription and detected properties first, translation second, in one
-    /// message per utterance.
-    static func formatMessage(transcription: String, detectedProperties: String, translation: String?) -> String {
-        let transcription: String = transcription.trimmingCharacters(in: .whitespacesAndNewlines)
-        if transcription.isEmpty {
-            return ""
-        }
-        var lines: [String] = [transcription]
-        if !detectedProperties.isEmpty {
-            lines.append("(\(detectedProperties))")
-        }
-        if let translation = translation?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !translation.isEmpty,
-           translation != transcription {
-            lines.append("")
-            lines.append(translation)
-        }
-        return lines.joined(separator: "\n")
     }
 }

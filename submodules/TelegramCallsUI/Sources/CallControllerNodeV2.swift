@@ -1179,7 +1179,19 @@ extension CallControllerNodeV2 {
     }
     
     /// Turn live translation on or off and remember the choice for this contact.
+    ///
+    /// With no target language set yet, turning it *on* opens the menu instead:
+    /// there is nothing to translate into, and silently doing nothing would look
+    /// like the button is broken.
     func sgSetTranslationEnabled(_ enabled: Bool) {
+        if enabled, SGSimpleSettings.shared.resolvedCallTranslationTargetLanguage(accountId: self.sgAccountId, peerId: self.sgPeerId) == nil {
+            self.sgPresentTranslationMenu()
+            return
+        }
+        self.sgApplyTranslationEnabled(enabled)
+    }
+
+    private func sgApplyTranslationEnabled(_ enabled: Bool) {
         SGSimpleSettings.shared.setCallTranslationEnabled(enabled, accountId: self.sgAccountId, peerId: self.sgPeerId)
         self.sgTranslationIsEnabled = enabled
         
@@ -1270,13 +1282,17 @@ extension CallControllerNodeV2 {
         
         items.append(ActionSheetTextItem(title: "Translate your speech into the language shown, and burn it into the video the other person sees."))
         
-        items.append(ActionSheetButtonItem(title: self.sgTranslationIsEnabled ? "Turn Translation Off" : "Turn Translation On", action: { [weak self] in
-            self?.sgDismissActionSheet()
-            guard let self else {
-                return
-            }
-            self.sgSetTranslationEnabled(!self.sgTranslationIsEnabled)
-        }))
+        if self.sgTranslationIsEnabled || currentTarget != nil {
+            items.append(ActionSheetButtonItem(title: self.sgTranslationIsEnabled ? "Turn Translation Off" : "Turn Translation On", action: { [weak self] in
+                self?.sgDismissActionSheet()
+                guard let self else {
+                    return
+                }
+                // Applies directly rather than going through the redirect, which
+                // would reopen this same menu.
+                self.sgApplyTranslationEnabled(!self.sgTranslationIsEnabled)
+            }))
+        }
         
         for language in SGCallTranslationSession.offeredLanguages(preferred: currentTarget) {
             let isSelected = SGCallTranslationSession.languagesMatch(currentTarget, language.code)
@@ -1286,10 +1302,15 @@ extension CallControllerNodeV2 {
                     return
                 }
                 SGSimpleSettings.shared.setCallTranslationTargetLanguage(language.code, accountId: self.sgAccountId, peerId: self.sgPeerId)
-                // Restart so the new target applies to the next utterance.
                 if self.sgTranslationIsEnabled {
+                    // Restart so the new target applies to the next utterance.
                     self.sgTranslationSession?.setEnabled(false, targetLanguage: nil)
                     self.sgStartTranslation()
+                } else {
+                    // Picking a language is the intent to use it — otherwise the
+                    // user picks a language, nothing happens, and they have to
+                    // find the toggle separately.
+                    self.sgApplyTranslationEnabled(true)
                 }
             }))
         }

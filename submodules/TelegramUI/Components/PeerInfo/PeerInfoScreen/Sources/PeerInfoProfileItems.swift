@@ -1066,6 +1066,38 @@ func infoItems(
         }))
         sgItemId += 1
     }
+
+    // MARK: Swiftgram
+    // The contact's native language, used as the default target for live call
+    // translation. There is no way to learn this from Telegram — Api.User
+    // .langCode is the client's interface language, not the language they
+    // speak, and TelegramCore discards it before it reaches TelegramUser — so
+    // it has to be set by hand, and this row is the only place that does it.
+    if case let .user(user) = data.peer, user.botInfo == nil, !isMyProfile {
+        let accountId = context.account.peerId.id._internalGetInt64Value()
+        let contactId = user.id.id._internalGetInt64Value()
+        let currentCode = SGSimpleSettings.shared.contactNativeLanguageCode(accountId: accountId, peerId: contactId)
+        let currentTitle = currentCode.flatMap { sgLanguageDisplayName(for: $0) } ?? "Not set"
+
+        items[.swiftgram]!.append(PeerInfoScreenDisclosureItem(
+            id: sgItemId,
+            label: .text(currentTitle),
+            text: "Speaks",
+            action: {
+                sgPresentContactLanguagePicker(
+                    context: context,
+                    presentationData: presentationData,
+                    accountId: accountId,
+                    contactId: contactId,
+                    currentCode: currentCode,
+                    requestLayout: {
+                        interaction.requestLayout(true)
+                    }
+                )
+            }
+        ))
+        sgItemId += 1
+    }
     
     
     var result: [(AnyHashable, [PeerInfoScreenItem])] = []
@@ -2006,4 +2038,79 @@ func editingItems(data: PeerInfoScreenData?, boostStatus: ChannelBoostStatus?, s
         }
     }
     return result
+}
+
+// MARK: Swiftgram
+
+/// Language name in the *user's* locale, so an English phone shows "Portuguese"
+/// rather than "português".
+func sgLanguageDisplayName(for code: String) -> String {
+    if let name = Locale.current.localizedString(forIdentifier: code), !name.isEmpty {
+        return name.prefix(1).uppercased() + name.dropFirst()
+    }
+    return code
+}
+
+/// Languages offered for a contact. Deliberately the same list the in-call menu
+/// uses, so the two surfaces cannot drift apart.
+private let sgContactLanguageCodes: [String] = [
+    "en", "es", "pt", "fr", "de", "it", "nl", "pl", "tr", "ru", "uk",
+    "ar", "hi", "id", "ja", "ko", "zh", "vi", "th", "sv", "da", "no", "fi"
+]
+
+/// Picker for the contact's native language.
+///
+/// An action sheet rather than a pushed controller: this is a one-shot choice
+/// from a short list, and it avoids threading a new case through
+/// PeerInfoInteraction for a single row.
+private func sgPresentContactLanguagePicker(
+    context: AccountContext,
+    presentationData: PresentationData,
+    accountId: Int64,
+    contactId: Int64,
+    currentCode: String?,
+    requestLayout: @escaping () -> Void
+) {
+    let actionSheet = ActionSheetController(presentationData: presentationData)
+    let dismiss: () -> Void = { [weak actionSheet] in
+        actionSheet?.dismissAnimated()
+    }
+
+    var items: [ActionSheetItem] = []
+    items.append(ActionSheetTextItem(title: "Their native language. Used as the default when translating video calls with this contact."))
+
+    if currentCode != nil {
+        items.append(ActionSheetButtonItem(title: "Clear", color: .destructive, action: {
+            dismiss()
+            SGSimpleSettings.shared.setContactNativeLanguage(nil, accountId: accountId, peerId: contactId)
+            requestLayout()
+        }))
+    }
+
+    var codes = sgContactLanguageCodes
+    // Pin an existing selection that is not in the built-in list, so a value
+    // set elsewhere is visible and clearable rather than silently missing.
+    if let currentCode = currentCode, !codes.contains(where: { $0 == currentCode }) {
+        codes.insert(currentCode, at: 0)
+    }
+
+    for code in codes {
+        let isSelected = currentCode == code
+        let title = sgLanguageDisplayName(for: code)
+        items.append(ActionSheetButtonItem(title: isSelected ? "\(title) ✓" : title, action: {
+            dismiss()
+            SGSimpleSettings.shared.setContactNativeLanguage(code, accountId: accountId, peerId: contactId)
+            requestLayout()
+        }))
+    }
+
+    actionSheet.setItemGroups([
+        ActionSheetItemGroup(items: items),
+        ActionSheetItemGroup(items: [
+            ActionSheetButtonItem(title: presentationData.strings.Common_Cancel, color: .accent, font: .bold, action: {
+                dismiss()
+            })
+        ])
+    ])
+    context.sharedContext.mainWindow?.present(actionSheet, on: .root)
 }

@@ -100,19 +100,16 @@ public final class SGCallTranslationSession {
 
     /// Whether the feature can be offered for this contact at all.
     ///
-    /// Deliberately does not consider whether translation is currently switched
-    /// on — this gates whether the button appears, and a button that vanishes
-    /// when you turn it off would be unusable. It does require a target
-    /// language, because without one there is nothing the button could do.
+    /// Only asks whether the services are configured. It deliberately does NOT
+    /// require a target language: requiring one deadlocked the feature, because
+    /// the button was the surface you would set the language from, so a contact
+    /// with no language set could never get one and the button never appeared.
+    /// With no language known the button is shown, tapping it opens the menu,
+    /// and you pick a language there.
     public static func isAvailable(accountPeerId: PeerId, peerId: PeerId) -> Bool {
-        guard isSGModulateSTTConfigured && isOpenAILunaTranslateConfigured else {
-            return false
-        }
-        let settings = SGSimpleSettings.shared
-        return settings.resolvedCallTranslationTargetLanguage(
-            accountId: accountPeerId.id._internalGetInt64Value(),
-            peerId: peerId.id._internalGetInt64Value()
-        ) != nil
+        let _ = accountPeerId
+        let _ = peerId
+        return isSGModulateSTTConfigured && isOpenAILunaTranslateConfigured
     }
 
     /// True when two language tags name the same language, comparing primary

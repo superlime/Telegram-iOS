@@ -170,7 +170,7 @@ genrule(
     ],
 )
 
-minimum_os_version = "15.0"
+minimum_os_version = "13.0"
 minimum_watchos_version="7.0" # MARK: Swiftgram
 
 notificationServiceExtensionVersion = "v1"

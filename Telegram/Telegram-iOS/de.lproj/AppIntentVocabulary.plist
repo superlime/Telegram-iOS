@@ -9,7 +9,39 @@
 			<string>INSendMessageIntent</string>
 			<key>IntentExamples</key>
 			<array>
-				<string>Sende Lisa eine Swiftgram-Nachricht, dass ich in 15 Minuten da bin.</string>
+				<string>Sende Lisa eine Limegram-Nachricht, dass ich in 15 Minuten da bin</string>
+			</array>
+		</dict>
+		<dict>
+			<key>IntentName</key>
+			<string>INSearchForMessagesIntent</string>
+			<key>IntentExamples</key>
+			<array>
+				<string>Zeige meine Limegram-Nachrichten</string>
+			</array>
+		</dict>
+		<dict>
+			<key>IntentName</key>
+			<string>INSetMessageAttributeIntent</string>
+			<key>IntentExamples</key>
+			<array>
+				<string>Markiere meine Limegram-Nachrichten als gelesen</string>
+			</array>
+		</dict>
+		<dict>
+			<key>IntentName</key>
+			<string>INStartAudioCallIntent</string>
+			<key>IntentExamples</key>
+			<array>
+				<string>Rufe Lisa über Limegram an</string>
+			</array>
+		</dict>
+		<dict>
+			<key>IntentName</key>
+			<string>INSearchCallHistoryIntent</string>
+			<key>IntentExamples</key>
+			<array>
+				<string>Zeige meine verpassten Limegram-Anrufe</string>
 			</array>
 		</dict>
 	</array>

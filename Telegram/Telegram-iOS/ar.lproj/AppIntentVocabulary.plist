@@ -9,7 +9,39 @@
 			<string>INSendMessageIntent</string>
 			<key>IntentExamples</key>
 			<array>
-				<string>أرسل رسالة لخالد عبر تيليجرام (Swiftgram) وأخبره أن هديته وصلت إلى المنزل</string>
+				<string>أرسل رسالة لخالد عبر Limegram وأخبره أنني سأصل خلال 10 دقائق</string>
+			</array>
+		</dict>
+		<dict>
+			<key>IntentName</key>
+			<string>INSearchForMessagesIntent</string>
+			<key>IntentExamples</key>
+			<array>
+				<string>اعرض رسائلي في Limegram</string>
+			</array>
+		</dict>
+		<dict>
+			<key>IntentName</key>
+			<string>INSetMessageAttributeIntent</string>
+			<key>IntentExamples</key>
+			<array>
+				<string>ضع علامة مقروء على رسائلي في Limegram</string>
+			</array>
+		</dict>
+		<dict>
+			<key>IntentName</key>
+			<string>INStartAudioCallIntent</string>
+			<key>IntentExamples</key>
+			<array>
+				<string>اتصل بخالد عبر Limegram</string>
+			</array>
+		</dict>
+		<dict>
+			<key>IntentName</key>
+			<string>INSearchCallHistoryIntent</string>
+			<key>IntentExamples</key>
+			<array>
+				<string>اعرض مكالماتي الفائتة في Limegram</string>
 			</array>
 		</dict>
 	</array>

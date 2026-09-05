@@ -483,6 +483,57 @@ Do **not** add opt-in `EngineMediaResource` overloads alongside raw-`MediaResour
 
 For consumer modules, prefer `EngineMediaResource` as the type in properties, locals, generic arguments and function parameters when the usage is a pure type reference. Do **not** try to use `EngineMediaResource` where a class must conform to `TelegramMediaResource` (Postbox protocol) or override `isEqual(to: MediaResource)` — those remain `import Postbox`.
 
+## Build environment gotchas (this Mac)
+
+Two things must be true or the build fails in ways that look unrelated to your
+change.
+
+**1. A simulator runtime matching the SDK must exist.**
+
+Xcode 26.2 (SDK 26.2, build 23C53) is selected, but the only installed runtime
+is iOS 26.5 (23F77) — the matching 26.2 runtime was deleted and Apple no longer
+offers it for download (`-downloadPlatform iOS -buildVersion 26.2`/`23C53` both
+return "not available"). Without a mapping, asset-catalog compilation fails:
+
+    Media.xcassets: error: No simulator runtime version from ["23F77"]
+    available to use with iphonesimulator SDK version 23C53
+
+Fix, once per machine:
+
+    xcrun simctl runtime match set iphoneos26.2 23F77
+
+This lives on the machine, not in the repo, so a fresh Mac needs it again.
+Note the SDK name is `iphoneos26.2` — `iphonesimulator26.2` is rejected.
+
+**2. A clean build needs warnings-as-errors relaxed.**
+
+Several upstream modules (Display, LegacyComponents, SiriIntents, ...) use API
+Apple deprecated in iOS 14/15 and compile with `-Werror` /
+`-warnings-as-errors`. They only pass because their objects are cached; force a
+real rebuild and they fail. Some cannot be fixed at all —
+`INSearchCallHistoryIntent` is deprecated "with no replacement".
+
+    bazel build Telegram/Swiftgram ... \
+      --@build_bazel_rules_swift//swift:copt=-no-warnings-as-errors \
+      --copt=-Wno-error=deprecated-declarations
+
+**This has a sharp edge.** Disabling it to get past other people's warnings
+also silences warnings about your own code. A `cast from 'EnginePeer?' to
+unrelated type 'TelegramUser' always fails` warning got through exactly this
+way and shipped a whole dead UI section in build 10. After any build using
+these flags, check your own files explicitly:
+
+    grep "warning:" build.log | grep -E "<files you touched>"
+
+and confirm new UI strings are actually in the binary rather than trusting a
+green build:
+
+    unzip -q bazel-bin/Telegram/Swiftgram.ipa -d /tmp/x
+    strings /tmp/x/Payload/*.app/Frameworks/TelegramUIFramework.framework/TelegramUIFramework | grep "<a literal you added>"
+
+Swift stores strings of 15 bytes or fewer inline, so short literals never show
+up in `strings` — pick a long one.
+
 ## Live call translation
 
 Speaking on a call is transcribed, translated, sent to the chat as one message

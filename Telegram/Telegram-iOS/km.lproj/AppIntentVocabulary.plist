@@ -9,7 +9,7 @@
 			<string>INSendMessageIntent</string>
 			<key>IntentExamples</key>
 			<array>
-				<string>Send a Swiftgram message to Alex saying I&apos;ll be there in 10 minutes</string>
+				<string>ផ្ញើសារ Swiftgram ទៅសុភា ថាខ្ញុំនឹងទៅដល់ក្នុងរយៈពេល ១០ នាទី</string>
 			</array>
 		</dict>
 		<dict>
@@ -17,7 +17,7 @@
 			<string>INStartAudioCallIntent</string>
 			<key>IntentExamples</key>
 			<array>
-				<string>Swiftgram'dan Ali'yi ara</string>
+				<string>ហៅទូរស័ព្ទទៅសុភាតាម Swiftgram</string>
 			</array>
 		</dict>
 		<dict>
@@ -25,7 +25,7 @@
 			<string>INSearchForMessagesIntent</string>
 			<key>IntentExamples</key>
 			<array>
-				<string>Swiftgram mesajlarımı göster</string>
+				<string>បង្ហាញសាររបស់ខ្ញុំក្នុង Swiftgram</string>
 			</array>
 		</dict>
 		<dict>
@@ -33,7 +33,7 @@
 			<string>INSetMessageAttributeIntent</string>
 			<key>IntentExamples</key>
 			<array>
-				<string>Swiftgram mesajlarımı okundu olarak işaretle</string>
+				<string>សម្គាល់សាររបស់ខ្ញុំក្នុង Swiftgram ថាបានអាន</string>
 			</array>
 		</dict>
 		<dict>
@@ -41,7 +41,7 @@
 			<string>INSearchCallHistoryIntent</string>
 			<key>IntentExamples</key>
 			<array>
-				<string>Swiftgram'daki cevapsız aramalarımı göster</string>
+				<string>បង្ហាញការហៅដែលខកខានរបស់ខ្ញុំក្នុង Swiftgram</string>
 			</array>
 		</dict>
 	</array>

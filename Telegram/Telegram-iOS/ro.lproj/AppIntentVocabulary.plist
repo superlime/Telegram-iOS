@@ -9,7 +9,7 @@
 			<string>INSendMessageIntent</string>
 			<key>IntentExamples</key>
 			<array>
-				<string>Send a Swiftgram message to Alex saying I&apos;ll be there in 10 minutes</string>
+				<string>Trimite-i lui Alex un mesaj pe Swiftgram că ajung în 10 minute</string>
 			</array>
 		</dict>
 		<dict>
@@ -17,7 +17,7 @@
 			<string>INStartAudioCallIntent</string>
 			<key>IntentExamples</key>
 			<array>
-				<string>Swiftgram'dan Ali'yi ara</string>
+				<string>Sună-l pe Alex pe Swiftgram</string>
 			</array>
 		</dict>
 		<dict>
@@ -25,7 +25,7 @@
 			<string>INSearchForMessagesIntent</string>
 			<key>IntentExamples</key>
 			<array>
-				<string>Swiftgram mesajlarımı göster</string>
+				<string>Arată-mi mesajele mele de pe Swiftgram</string>
 			</array>
 		</dict>
 		<dict>
@@ -33,7 +33,7 @@
 			<string>INSetMessageAttributeIntent</string>
 			<key>IntentExamples</key>
 			<array>
-				<string>Swiftgram mesajlarımı okundu olarak işaretle</string>
+				<string>Marchează mesajele mele de pe Swiftgram ca citite</string>
 			</array>
 		</dict>
 		<dict>
@@ -41,7 +41,7 @@
 			<string>INSearchCallHistoryIntent</string>
 			<key>IntentExamples</key>
 			<array>
-				<string>Swiftgram'daki cevapsız aramalarımı göster</string>
+				<string>Arată-mi apelurile pierdute de pe Swiftgram</string>
 			</array>
 		</dict>
 	</array>

@@ -282,7 +282,16 @@ public final class SGCallTranslationSession {
         // Context for *this* utterance is what came before it, not itself.
         let context: [String] = Array(self.previousUtterances.dropLast())
 
-        self.sequencer.enqueue(utterance.uuid)
+        // Subtitles are burned into the video the other person sees, so they
+        // carry only what the phone's owner said. Captioning a bystander picked
+        // up through the same microphone would put words on the outgoing video
+        // that the owner never spoke — and that the other party has no way to
+        // attribute. Such utterances still get a chat message; they just do not
+        // enter the subtitle strip.
+        let isLocalSpeaker = SGCallMessageFormatter.isLocalSpeaker(utterance.speakerNumber)
+        if isLocalSpeaker {
+            self.sequencer.enqueue(utterance.uuid)
+        }
 
         // Post what was said straight away. The translation is seconds behind,
         // and holding the whole message back for it left the chat lagging the
@@ -377,6 +386,10 @@ public final class SGCallTranslationSession {
             }
         }
 
+        guard SGCallMessageFormatter.isLocalSpeaker(utterance.speakerNumber) else {
+            // Never entered the sequencer; nothing to release.
+            return
+        }
         // Subtitles show the target language, so an untranslated utterance
         // falls back to the speaker's own words rather than showing nothing.
         guard let published = self.sequencer.complete(uuid, text: translation ?? utterance.text) else {

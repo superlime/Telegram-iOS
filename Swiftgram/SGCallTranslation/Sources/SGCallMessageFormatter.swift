@@ -45,6 +45,19 @@ public enum SGCallMessageFormatter {
     /// phone. Anyone else on this tap is someone in the room with them.
     public static let localSpeakerNumber: Int = 1
 
+    /// Whether this utterance came from the person holding the phone.
+    ///
+    /// A nil label means diarisation had no opinion, which is treated as the
+    /// local speaker: with a microphone tap that is overwhelmingly the likely
+    /// answer, and the alternative would caption the user's own speech as a
+    /// stranger's.
+    public static func isLocalSpeaker(_ speakerNumber: Int?) -> Bool {
+        guard let speakerNumber = speakerNumber else {
+            return true
+        }
+        return speakerNumber == self.localSpeakerNumber
+    }
+
     /// - Parameters:
     ///   - speakerNumber: nil when diarisation said nothing, which is treated
     ///     as the local speaker rather than as an unknown third party.
@@ -65,7 +78,7 @@ public enum SGCallMessageFormatter {
             return SGCallMessageBody(text: "", entities: [])
         }
 
-        let isRemoteSpeaker = (speakerNumber != nil && speakerNumber != self.localSpeakerNumber)
+        let isRemoteSpeaker = !self.isLocalSpeaker(speakerNumber)
 
         var lines: [String] = []
         var headerLength: Int = 0

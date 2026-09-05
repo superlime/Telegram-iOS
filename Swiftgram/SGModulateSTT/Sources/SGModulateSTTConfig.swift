@@ -16,9 +16,15 @@ public enum SGModulateSTTConfig {
     /// else in the room talks.
     public static let speakerDiarization: Bool = true
 
-    /// Emotion and accent are fed to the translator as hints, which is the
-    /// point of enabling them.
-    public static let emotionSignal: Bool = true
+    /// Accent is fed to the translator as a hint, which is the point of
+    /// enabling it.
+    ///
+    /// Emotion is off. It was enabled for the same reason, but it earns its
+    /// place far less: it is a per-utterance guess from a short, echo-cancelled
+    /// microphone tap, and a wrong label is worse than no label because the
+    /// translator acts on it. Turning it off also drops it from the properties
+    /// line, since the model stops reporting it.
+    public static let emotionSignal: Bool = false
     public static let accentSignal: Bool = true
 
     /// Interim results. We only ever publish finalised utterances, so asking

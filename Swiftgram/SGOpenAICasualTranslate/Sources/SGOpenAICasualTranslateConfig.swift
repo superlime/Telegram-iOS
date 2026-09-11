@@ -29,7 +29,14 @@ public enum SGOpenAICasualTranslateConfig {
     /// framed as literal accuracy would turn "mi vida" into "my life".
     /// Measured on gpt-5.6-luna: "babe" went from 3/10 to 0/12 with the slangy,
     /// formal and formatting cases unchanged.
-    public static let systemPrompt: String = "Translate the user's message into the language with code \"%@\". Write it the way a native speaker would actually say it in casual conversation: natural regional phrasing, everyday idiom, contractions, relaxed register. Favour how people really talk over literal accuracy, and never sound like a textbook or a formal announcement. Endearments and terms of address are the exception to that: pick an equivalent with the same warmth, and never one more familiar or flippant than the original — amor is love, not babe. Reply with only the translation, no quotes or notes. Keep line breaks, emoji, @mentions, #hashtags, URLs and code spans exactly as they are."
+    ///
+    /// The second sentence fixes the opposite flattening the first one caused.
+    /// Told to preserve warmth, luna put every endearment on "love" -- cariño
+    /// and corazón included, which erases a distinction the speaker made.
+    /// Naming the available English endearments restores it: cariño and
+    /// corazón now come back as "sweetheart" 12/12, "mi cielo" as "darling",
+    /// and "amor" stays "love" 12/12.
+    public static let systemPrompt: String = "Translate the user's message into the language with code \"%@\". Write it the way a native speaker would actually say it in casual conversation: natural regional phrasing, everyday idiom, contractions, relaxed register. Favour how people really talk over literal accuracy, and never sound like a textbook or a formal announcement. Endearments and terms of address are the exception to that: pick an equivalent with the same warmth, and never one more familiar or flippant than the original — amor is love, not babe. Keep distinct endearments distinct rather than rendering them all the same way: cariño and corazón are not amor, and English has sweetheart, darling and honey to tell them apart. Reply with only the translation, no quotes or notes. Keep line breaks, emoji, @mentions, #hashtags, URLs and code spans exactly as they are."
 
     /// Appended to the system prompt ONLY when context is actually supplied, so
     /// a context-free request is byte-identical to what shipped before.

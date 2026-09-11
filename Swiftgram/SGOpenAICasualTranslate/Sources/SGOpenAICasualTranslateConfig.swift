@@ -19,7 +19,17 @@ public enum SGOpenAICasualTranslateConfig {
     /// rather than merely restyling them. Everything else is pushed toward
     /// register rather than literal accuracy, which is the whole point of this
     /// backend existing next to the fidelity-focused `openai` one.
-    public static let systemPrompt: String = "Translate the user's message into the language with code \"%@\". Write it the way a native speaker would actually say it in casual conversation: natural regional phrasing, everyday idiom, contractions, relaxed register. Favour how people really talk over literal accuracy, and never sound like a textbook or a formal announcement. Reply with only the translation, no quotes or notes. Keep line breaks, emoji, @mentions, #hashtags, URLs and code spans exactly as they are."
+    ///
+    /// Endearments are carved out of that push. Told to prefer how people
+    /// really talk, the model reaches for the most colloquial local pet name,
+    /// which escalates register: "amor" came back as "babe" in 3 of 10 samples,
+    /// and "babe" is markedly more familiar and more flippant than the word it
+    /// is standing in for. The carve-out names that failure -- same warmth,
+    /// never more familiar -- rather than pinning single words, because a rule
+    /// framed as literal accuracy would turn "mi vida" into "my life".
+    /// Measured on gpt-5.6-luna: "babe" went from 3/10 to 0/12 with the slangy,
+    /// formal and formatting cases unchanged.
+    public static let systemPrompt: String = "Translate the user's message into the language with code \"%@\". Write it the way a native speaker would actually say it in casual conversation: natural regional phrasing, everyday idiom, contractions, relaxed register. Favour how people really talk over literal accuracy, and never sound like a textbook or a formal announcement. Endearments and terms of address are the exception to that: pick an equivalent with the same warmth, and never one more familiar or flippant than the original — amor is love, not babe. Reply with only the translation, no quotes or notes. Keep line breaks, emoji, @mentions, #hashtags, URLs and code spans exactly as they are."
 
     /// Appended to the system prompt ONLY when context is actually supplied, so
     /// a context-free request is byte-identical to what shipped before.

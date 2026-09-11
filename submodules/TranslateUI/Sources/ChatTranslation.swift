@@ -5,6 +5,7 @@ import SwiftSignalKit
 import TelegramCore
 import AccountContext
 import TelegramUIPreferences
+import SGSimpleSettings
 
 public struct ChatTranslationState: Codable {
     enum CodingKeys: String, CodingKey {
@@ -279,13 +280,67 @@ public func chatTranslationState(context: AccountContext, peerId: EnginePeer.Id,
                     dontTranslateLanguages.insert(language)
                 }
             }
+
+            // MARK: Swiftgram
+            //
+            // Recognition is done on whatever recent incoming messages happen to
+            // be loaded, so it fails outright on a short or media-heavy chat and
+            // misreads a chat that opens with a stretch of English. Either way
+            // the panel used to vanish and translation stopped, which is exactly
+            // where it is wanted most.
+            //
+            // The contact's "Speaks" setting is a statement from the user about
+            // this specific person, so it outranks a guess: where recognition
+            // gives nothing usable, fall back to it. Deliberately NOT filtered
+            // against dontTranslateLanguages -- that list is a global default,
+            // and naming a language for one contact is the more specific
+            // instruction. It is only rejected when it matches the language the
+            // user already reads, where translating would be a no-op.
+            let sgPeerNativeLang: String? = {
+                guard let code = SGSimpleSettings.shared.contactNativeLanguageCode(
+                    accountId: context.account.peerId.id._internalGetInt64Value(),
+                    peerId: peerId.id._internalGetInt64Value()
+                ) else {
+                    return nil
+                }
+                let normalized = normalizeTranslationLanguage(code)
+                guard !normalized.isEmpty, supportedTranslationLanguages.contains(normalized) else {
+                    return nil
+                }
+                guard normalized != baseLang else {
+                    return nil
+                }
+                return normalized
+            }()
+
+            /// Whether recognition produced a language worth offering to translate.
+            func sgIsUsableSourceLanguage(_ lang: String) -> Bool {
+                return !lang.isEmpty && !dontTranslateLanguages.contains(lang)
+            }
             
             return cachedChatTranslationState(engine: context.engine, peerId: peerId, threadId: threadId)
             |> mapToSignal { cached in
                 let currentTime = Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970)
                 if let cached, let timestamp = cached.timestamp, cached.baseLang == baseLang && currentTime - timestamp < 60 * 60 {
-                    if !dontTranslateLanguages.contains(cached.fromLang) || forcePredict {
+                    if sgIsUsableSourceLanguage(cached.fromLang) || forcePredict {
                         return .single(cached)
+                    } else if let native = sgPeerNativeLang {
+                        // MARK: Swiftgram
+                        // Persist the substitution instead of re-deriving it on
+                        // every read. Next load this state is cached with a
+                        // usable fromLang and takes the branch above, so the
+                        // enable below happens once -- at the switch -- and a
+                        // later "Show Original" is not overridden each time the
+                        // chat is opened.
+                        let state = ChatTranslationState(
+                            baseLang: baseLang,
+                            fromLang: native,
+                            timestamp: currentTime,
+                            toLang: cached.toLang,
+                            isEnabled: true
+                        )
+                        let _ = updateChatTranslationState(engine: context.engine, peerId: peerId, threadId: threadId, state: state).start()
+                        return .single(state)
                     } else {
                         return .single(nil)
                     }
@@ -378,24 +433,39 @@ public func chatTranslationState(context: AccountContext, peerId: EnginePeer.Id,
                                 Logger.shared.log("ChatTranslation", "Ended with: \(fromLang)")
                             }
                             
+                            // MARK: Swiftgram
+                            let detectionUsable = sgIsUsableSourceLanguage(fromLang)
+                            let usingNativeFallback = !detectionUsable && sgPeerNativeLang != nil
+                            let resolvedFromLang = usingNativeFallback ? (sgPeerNativeLang ?? fromLang) : fromLang
+
                             let isEnabled: Bool
-                            if let currentIsEnabled = cached?.isEnabled {
+                            if usingNativeFallback {
+                                // Any stored choice was made about a source
+                                // language that has just been replaced, so it
+                                // does not carry over to this one.
+                                isEnabled = true
+                            } else if let currentIsEnabled = cached?.isEnabled {
                                 isEnabled = currentIsEnabled
                             } else if autoTranslateEnabled {
                                 isEnabled = true
                             } else {
-                                isEnabled = false
+                                // Default on once there is a language to
+                                // translate from. Defaulting off meant the panel
+                                // appeared having done nothing, and the common
+                                // case for anyone who turns this on is that they
+                                // want it applied.
+                                isEnabled = detectionUsable
                             }
                             
                             let state = ChatTranslationState(
                                 baseLang: baseLang,
-                                fromLang: fromLang,
+                                fromLang: resolvedFromLang,
                                 timestamp: currentTime,
                                 toLang: cached?.toLang,
                                 isEnabled: isEnabled
                             )
                             let _ = updateChatTranslationState(engine: context.engine, peerId: peerId, threadId: threadId, state: state).start()
-                            if !dontTranslateLanguages.contains(fromLang) || forcePredict {
+                            if detectionUsable || usingNativeFallback || forcePredict {
                                 return state
                             } else {
                                 return nil

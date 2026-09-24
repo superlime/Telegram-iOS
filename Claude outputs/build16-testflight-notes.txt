@@ -1,0 +1,15 @@
+Build 16 — call translation
+
+New: live captions. As you speak, the words recognised so far appear on the other person's video and in a chat message ending in "…". When the sentence is final the message is completed, then subtitle line and message switch to the translation. Only finished sentences are translated. Chat edits are limited to one per 2.5 s; subtitles update continuously. Each sentence keeps its own subtitle line.
+
+Fixed: translation stopping after a while (button needed two taps). The link to the transcription service was never reopened after it dropped, which happens after ~45 s of listening. It is now closed on purpose after 45 s of silence and reopened on your next word (about a second), and a link that goes dead mid-sentence is replaced after 20 s.
+
+Fixed: translate button lit at call start but doing nothing. If saved ON for that contact, translation now starts by itself when the call connects.
+
+Fixed: Ericka heard as two speakers. Speaker separation is off; everything the mic hears is treated as the phone owner. Side effect: someone else near the phone is captioned as you.
+
+Not reproduced: transcript stuck until you made a noise. As insurance the app now sends 1.5 s of silence after you stop talking (was 0.7). The live caption will show whether the service heard you.
+
+Not fixed: microphone missing on a video call. Next time it happens, check the chat: if your transcript is filling while the other person hears nothing, the mic works and audio is lost on the way out (note whether the Bose were connected). If the chat is also empty with translation on, the mic input itself is dead (note which audio output was selected and whether switching it helped).
+
+Please check: translation keeps going for a whole call without touching the button; the button is right at call start; all of Ericka's lines reach Scott's subtitles with no "Speaker 2" messages; whether live captions on the video are useful or distracting; whether a "…" message ever gets stuck; after a long pause the first word may take ~1 s longer to appear.

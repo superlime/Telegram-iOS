@@ -1,6 +1,6 @@
 # Plan: live call translation fixes (build 15)
 
-Overall: T1–T11 done, uncommitted on feature/azure-translator (2026-09-24). Build 16 uploaded to TestFlight 03:04; release notes + processing poll running. Issue 1 (silent mic) open, diagnostic given to testers.
+Overall: T1–T11 done, uncommitted on feature/azure-translator (2026-09-24). Build 16 on TestFlight: VALID, IN_BETA_TESTING, notes attached (2026-09-24). Pushed as 4334a26d10. Issue 1 (silent mic) open, diagnostic given to testers.
 
 Status legend: [ ] todo · [~] in progress · [x] done · [!] blocked / needs a real call to confirm
 
@@ -142,3 +142,7 @@ Reported 2026-09-24 (Scott iPhone 18 Pro Max, sometimes Bose QC2 mic; Ericka iPh
 - Release build 16: green, CFBundleVersion 16 / 12.9.2, altool validate
   clean (only warning 90068, iOS 13 target), upload accepted 03:04.
   `asc-testflight.py 16 --notes-file` running to attach the notes.
+- Build 16 processed VALID; internal group has it (IN_BETA_TESTING).
+  TestFlight whatsNew has a 4000-char limit: the full notes (4935 chars)
+  were rejected, so a 2063-char condensed copy lives in
+  `Claude outputs/build16-testflight-notes.txt` and is what testers see.

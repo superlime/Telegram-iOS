@@ -68,6 +68,8 @@ public final class SGCallTranslationSession {
     public var onSubtitlesChanged: (([String]) -> Void)?
     /// Raised when something goes wrong badly enough that the UI should show it.
     public var onError: ((String) -> Void)?
+    /// Raised for recoverable hiccups, for logging only.
+    public var onTransientError: ((String) -> Void)?
 
     private let account: Account
     private let peerId: PeerId
@@ -75,6 +77,9 @@ public final class SGCallTranslationSession {
 
     private var frontEnd: SGModulateAudioFrontEnd?
     private var sttSession: SGModulateSTTSession?
+    /// Read on the audio thread, so audio is not copied and queued while the
+    /// feature is off. Everything else in here belongs to `queue`.
+    private let acceptsAudio = Atomic<Bool>(value: false)
 
     private var isEnabled: Bool = false
     private var targetLanguage: String?
@@ -91,10 +96,31 @@ public final class SGCallTranslationSession {
 
     /// Ordered transcript of the call, used as translation context.
     private var previousUtterances: [String] = []
-    /// Translations complete out of order; this republishes them in the order
-    /// they were spoken.
-    private var sequencer = SGSubtitleSequencer(windowSize: SGCallTranslationConfig.subtitleLineCount)
+    /// One line per utterance: partial transcript, then final, then translation.
+    private var strip = SGSubtitleStrip(windowSize: SGCallTranslationConfig.subtitleLineCount)
     private var disposables: [String: Disposable] = [:]
+
+    /// Speech the recogniser is still working on. Keyed by the segment's
+    /// start offset, which is the only handle a partial carries — there is no
+    /// uuid until the utterance is final, and the final carries the same
+    /// start offset, which is how the two are joined up.
+    private struct Provisional {
+        let key: String
+        var startMs: Int?
+        var text: String
+        var speakerNumber: Int?
+        /// Posted once the partial has enough words to be worth a message.
+        var message: SGCallTranslationMessage?
+        var lastChatEditAt: Double = 0.0
+        var chatEditScheduled: Bool = false
+    }
+    private var provisionals: [Provisional] = []
+    /// Chat edits are rate-limited by Telegram, and partials arrive several
+    /// times a second. The strip is local and updates on every one.
+    private static let chatEditInterval: Double = 2.5
+    /// A partial shorter than this is not worth a chat message yet: the first
+    /// few arrive as single letters.
+    private static let minimumPartialLengthForChat: Int = 12
 
     public init(account: Account, peerId: PeerId) {
         self.account = account
@@ -187,10 +213,29 @@ public final class SGCallTranslationSession {
         }
     }
 
-    /// Push microphone audio. Called on the realtime audio thread — this must
-    /// stay a copy-and-enqueue, which is exactly what the front-end does.
+    /// Push microphone audio. Called on the realtime audio thread, under the
+    /// audio device's own lock and ahead of the buffer reaching WebRTC.
+    ///
+    /// This must stay a copy-and-enqueue. The gate, downmix and framing run on
+    /// the session queue, which is also where `stopImpl` tears the front end
+    /// down — so the front end is only ever touched from one queue. It used
+    /// to be driven from here directly, racing `finish()` on the queue.
     public func appendAudio(samples: UnsafePointer<Int16>, sampleCount: Int, channels: Int, sampleRate: Int32) {
-        self.frontEnd?.append(samples: samples, sampleCount: sampleCount, channels: channels, sampleRate: sampleRate)
+        guard sampleCount > 0, channels > 0, self.acceptsAudio.with({ $0 }) else {
+            return
+        }
+        let data = Data(bytes: samples, count: sampleCount * channels * MemoryLayout<Int16>.size)
+        self.queue.async { [weak self] in
+            guard let self = self, let frontEnd = self.frontEnd else {
+                return
+            }
+            data.withUnsafeBytes { raw in
+                guard let base = raw.bindMemory(to: Int16.self).baseAddress else {
+                    return
+                }
+                frontEnd.append(samples: base, sampleCount: sampleCount, channels: channels, sampleRate: sampleRate)
+            }
+        }
     }
 
     // MARK: Private
@@ -211,6 +256,11 @@ public final class SGCallTranslationSession {
                 self?.handle(utterance: utterance)
             }
         }
+        session.onPartialUtterance = { [weak self] partial in
+            self?.queue.async {
+                self?.handle(partial: partial)
+            }
+        }
         session.onError = { [weak self] error in
             self?.queue.async {
                 switch error {
@@ -219,9 +269,10 @@ public final class SGCallTranslationSession {
                 case let .api(message):
                     self?.onError?(message ?? "Transcription failed.")
                 case .network, .handshake:
-                    // Transient. The next utterance opens a fresh socket, so
-                    // there is nothing useful to tell the user mid-call.
-                    break
+                    // Transient: the recogniser drops the socket and the next
+                    // frame opens a fresh one, so there is nothing to tell the
+                    // user mid-call. Worth a log line, though.
+                    self?.onTransientError?("Transcription socket dropped; reconnecting on next speech.")
                 }
             }
         }
@@ -234,9 +285,11 @@ public final class SGCallTranslationSession {
 
         self.sttSession = session
         self.frontEnd = frontEnd
+        let _ = self.acceptsAudio.swap(true)
     }
 
     private func stopImpl() {
+        let _ = self.acceptsAudio.swap(false)
         self.frontEnd?.finish()
         self.frontEnd = nil
         // finish() drains: the last thing the speaker said still arrives, and
@@ -261,13 +314,150 @@ public final class SGCallTranslationSession {
         }
         self.messages.removeAll()
         self.messageOrder.removeAll()
+        for provisional in self.provisionals {
+            provisional.message?.cancel()
+        }
+        self.provisionals.removeAll()
 
-        self.sequencer.reset()
+        self.strip.reset()
         self.previousUtterances.removeAll()
         Queue.mainQueue().async { [weak self] in
             self?.onSubtitlesChanged?([])
         }
     }
+
+    // MARK: Partials
+
+    private static func partialKey(startMs: Int?) -> String {
+        return startMs.map { "partial:\($0)" } ?? "partial:pending"
+    }
+
+    /// Interim text for speech in progress: goes straight onto the strip, and
+    /// into a chat message at a throttled rate. Never translated — it changes
+    /// with every frame, and the translator would be paid to chase it.
+    private func handle(partial: SGModulatePartialUtterance) {
+        guard self.isEnabled else {
+            return
+        }
+        let key = SGCallTranslationSession.partialKey(startMs: partial.startMs)
+        var index = self.provisionals.firstIndex(where: { $0.key == key })
+        if index == nil, partial.startMs != nil,
+           let pendingIndex = self.provisionals.firstIndex(where: { $0.startMs == nil }) {
+            // The first partial or two arrive before the server has placed
+            // the segment on the clock. Now it has: adopt the offset, and
+            // carry the line and message across under the new key.
+            let pendingKey = self.provisionals[pendingIndex].key
+            self.provisionals[pendingIndex].startMs = partial.startMs
+            let renamed = Provisional(
+                key: key,
+                startMs: partial.startMs,
+                text: self.provisionals[pendingIndex].text,
+                speakerNumber: self.provisionals[pendingIndex].speakerNumber,
+                message: self.provisionals[pendingIndex].message,
+                lastChatEditAt: self.provisionals[pendingIndex].lastChatEditAt,
+                chatEditScheduled: self.provisionals[pendingIndex].chatEditScheduled
+            )
+            self.provisionals[pendingIndex] = renamed
+            let _ = self.strip.removePartial(key: pendingKey)
+            index = pendingIndex
+        }
+        if index == nil {
+            self.provisionals.append(Provisional(key: key, startMs: partial.startMs, text: partial.text, speakerNumber: partial.speakerNumber))
+            index = self.provisionals.count - 1
+        }
+        guard let i = index else {
+            return
+        }
+        self.provisionals[i].text = partial.text
+        if let speakerNumber = partial.speakerNumber {
+            self.provisionals[i].speakerNumber = speakerNumber
+        }
+
+        if SGCallMessageFormatter.isLocalSpeaker(self.provisionals[i].speakerNumber) {
+            if let published = self.strip.setPartial(key: key, text: partial.text) {
+                self.publish(published)
+            }
+        }
+        self.flushPartialToChat(key: key)
+    }
+
+    /// Post or edit the provisional chat message, no more often than
+    /// `chatEditInterval`. A partial that arrives inside the interval is held
+    /// and the newest one is sent when it expires.
+    private func flushPartialToChat(key: String) {
+        guard let i = self.provisionals.firstIndex(where: { $0.key == key }) else {
+            return
+        }
+        let now = CFAbsoluteTimeGetCurrent()
+        let elapsed = now - self.provisionals[i].lastChatEditAt
+        if elapsed < SGCallTranslationSession.chatEditInterval {
+            if !self.provisionals[i].chatEditScheduled {
+                self.provisionals[i].chatEditScheduled = true
+                self.queue.after(SGCallTranslationSession.chatEditInterval - elapsed) { [weak self] in
+                    guard let self = self, let j = self.provisionals.firstIndex(where: { $0.key == key }) else {
+                        return
+                    }
+                    self.provisionals[j].chatEditScheduled = false
+                    self.flushPartialToChat(key: key)
+                }
+            }
+            return
+        }
+        let body = SGCallMessageFormatter.partialBody(transcription: self.provisionals[i].text, speakerNumber: self.provisionals[i].speakerNumber)
+        guard !body.isEmpty else {
+            return
+        }
+        if let message = self.provisionals[i].message {
+            message.update(text: body.text, entities: SGCallTranslationSession.messageEntities(body.entities))
+        } else {
+            guard self.provisionals[i].text.count >= SGCallTranslationSession.minimumPartialLengthForChat else {
+                return
+            }
+            let message = SGCallTranslationMessage(account: self.account, peerId: self.peerId, queue: self.queue)
+            message.send(text: body.text, entities: SGCallTranslationSession.messageEntities(body.entities))
+            self.provisionals[i].message = message
+        }
+        self.provisionals[i].lastChatEditAt = now
+    }
+
+    /// Find the in-progress segment a final utterance grew out of, and retire
+    /// it. Matched on start offset; the segment still waiting for one is the
+    /// fallback. Anything older than the utterance is superseded — the API
+    /// promises a final supersedes every partial before it — and is dropped,
+    /// its stub message left to stand as whatever was heard.
+    private func takeProvisional(for utterance: SGModulateUtterance) -> Provisional? {
+        var matchIndex = self.provisionals.firstIndex(where: { $0.startMs == utterance.startMs })
+        if matchIndex == nil {
+            matchIndex = self.provisionals.firstIndex(where: { $0.startMs == nil })
+        }
+        let match = matchIndex.map { self.provisionals.remove(at: $0) }
+
+        let stale = self.provisionals.filter { ($0.startMs ?? Int.max) < utterance.startMs }
+        for orphan in stale {
+            if let published = self.strip.removePartial(key: orphan.key) {
+                self.publish(published)
+            }
+            // The stub's ellipsis promised more; make it read as complete.
+            if let message = orphan.message {
+                let body = SGCallMessageFormatter.body(
+                    transcription: orphan.text,
+                    detectedProperties: "",
+                    speakerNumber: orphan.speakerNumber,
+                    recognitionLatency: nil,
+                    translation: nil,
+                    translationLanguageName: nil,
+                    translationLatency: nil
+                )
+                if !body.isEmpty {
+                    message.update(text: body.text, entities: SGCallTranslationSession.messageEntities(body.entities))
+                }
+            }
+        }
+        self.provisionals.removeAll(where: { orphan in stale.contains(where: { $0.key == orphan.key }) })
+        return match
+    }
+
+    // MARK: Utterances
 
     private func handle(utterance: SGModulateUtterance) {
         let targetLanguage: String = self.targetLanguage ?? ""
@@ -282,21 +472,36 @@ public final class SGCallTranslationSession {
         // Context for *this* utterance is what came before it, not itself.
         let context: [String] = Array(self.previousUtterances.dropLast())
 
+        let provisional = self.takeProvisional(for: utterance)
+
         // Subtitles are burned into the video the other person sees, so they
         // carry only what the phone's owner said. Captioning a bystander picked
         // up through the same microphone would put words on the outgoing video
         // that the owner never spoke — and that the other party has no way to
         // attribute. Such utterances still get a chat message; they just do not
         // enter the subtitle strip.
+        //
+        // Diarisation is currently off (see SGModulateSTTConfig), so every
+        // utterance arrives unlabelled and counts as the owner's. The gate is
+        // kept so that turning it back on needs no change here.
         let isLocalSpeaker = SGCallMessageFormatter.isLocalSpeaker(utterance.speakerNumber)
         if isLocalSpeaker {
-            self.sequencer.enqueue(utterance.uuid)
+            // The final transcript takes over the partial's line — or gets a
+            // line of its own if it arrived without partials — and shows
+            // until the translation replaces it.
+            if let published = self.strip.commit(partialKey: provisional?.key, uuid: utterance.uuid, text: utterance.text) {
+                self.publish(published)
+            }
+        } else if let provisional = provisional {
+            if let published = self.strip.removePartial(key: provisional.key) {
+                self.publish(published)
+            }
         }
 
         // Post what was said straight away. The translation is seconds behind,
         // and holding the whole message back for it left the chat lagging the
         // conversation badly enough to be useless as a live record.
-        self.post(utterance: utterance)
+        self.post(utterance: utterance, reusing: provisional?.message)
 
         guard let destination = SGCallTranslationSession.resolveTranslationTarget(
             detected: utterance.language,
@@ -328,9 +533,10 @@ public final class SGCallTranslationSession {
         self.disposables[utterance.uuid] = disposable
     }
 
-    /// Send the transcript-only message and remember it so the translation can
-    /// be edited in.
-    private func post(utterance: SGModulateUtterance) {
+    /// Send the transcript-only message — or, when the partials already
+    /// posted one, edit the final transcript into it — and remember it so the
+    /// translation can be edited in.
+    private func post(utterance: SGModulateUtterance, reusing existing: SGCallTranslationMessage?) {
         let body = SGCallMessageFormatter.body(
             transcription: utterance.text,
             detectedProperties: utterance.detectedPropertiesDescription,
@@ -343,8 +549,14 @@ public final class SGCallTranslationSession {
         guard !body.isEmpty else {
             return
         }
-        let message = SGCallTranslationMessage(account: self.account, peerId: self.peerId, queue: self.queue)
-        message.send(text: body.text, entities: SGCallTranslationSession.messageEntities(body.entities))
+        let message: SGCallTranslationMessage
+        if let existing = existing {
+            message = existing
+            message.update(text: body.text, entities: SGCallTranslationSession.messageEntities(body.entities))
+        } else {
+            message = SGCallTranslationMessage(account: self.account, peerId: self.peerId, queue: self.queue)
+            message.send(text: body.text, entities: SGCallTranslationSession.messageEntities(body.entities))
+        }
         self.messages[utterance.uuid] = message
         self.messageOrder.append(utterance.uuid)
         self.evictOldMessages()
@@ -387,16 +599,20 @@ public final class SGCallTranslationSession {
         }
 
         guard SGCallMessageFormatter.isLocalSpeaker(utterance.speakerNumber) else {
-            // Never entered the sequencer; nothing to release.
+            // Never entered the strip; nothing to update.
             return
         }
         // Subtitles show the target language, so an untranslated utterance
-        // falls back to the speaker's own words rather than showing nothing.
-        guard let published = self.sequencer.complete(uuid, text: translation ?? utterance.text) else {
+        // keeps the speaker's own words rather than showing nothing.
+        guard let published = self.strip.translate(uuid: uuid, text: translation ?? utterance.text) else {
             return
         }
+        self.publish(published)
+    }
+
+    private func publish(_ lines: [String]) {
         Queue.mainQueue().async { [weak self] in
-            self?.onSubtitlesChanged?(published)
+            self?.onSubtitlesChanged?(lines)
         }
     }
 

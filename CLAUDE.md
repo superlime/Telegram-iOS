@@ -576,6 +576,26 @@ Things that will bite you:
   appears sideways/upside down on the other end. Verify by rendering synthetic
   I420 to PNG and re-applying the rotation — that is how the transposed 90/270
   mapping was caught.
+- **The socket is not the session.** `SGModulateSTTSession` opens a socket per
+  stretch of speech: its own idle timer ends a quiet socket (send `""`, read
+  until `done`), a watchdog replaces one that has carried 20 s of audio with
+  no reply, and the next frame reconnects. Do not lean on URLSession's
+  `timeoutIntervalForRequest` for this — when it fires on a websocket the task
+  dies *silently*: sends keep succeeding, the receive never fails. That was
+  the "translation stops after a while" bug. Stream offsets (`start_ms`) are
+  per connection, so the wall-clock ledger lives on the socket object.
+- **Partials have no uuid.** `partial_utterance` carries only `start_ms`,
+  which is constant for the segment and equals the final utterance's
+  `start_ms`; the first partial or two may have it nil. The session keys
+  in-progress speech on it. Partials are never translated.
+- **Diarisation is off** (`speaker_diarization=false`). It split one tester's
+  voice into two speakers and the API has no speaker-count cap. The server
+  still reports `speaker: 1` with it off, so the local-speaker gate holds.
+- **Verify without the app.** Copy `SGModulateSTT/Sources` + SwiftSignalKit
+  into a scratch dir, drop the `import SwiftSignalKit` lines, build with
+  `xcrun swiftc -module-name H`, and feed it PCM from `say -v Paulina …` via
+  `afconvert -f WAVE -d LEI16@16000 -c 1`. Shorten `idleTimeout` in the copy to
+  see reconnects in seconds. Delete the copies — they contain the API key.
 
 ### The vendored VideoCameraCapturer
 

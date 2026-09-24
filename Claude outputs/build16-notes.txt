@@ -1,0 +1,84 @@
+Build 16 — live call translation: live partial captions, and fixes for three
+of the four reported problems.
+
+Live captions while you speak (new)
+- Subtitles and the chat message no longer wait for you to finish a
+  sentence. As you talk, the words recognised so far appear on the other
+  person's video and in a chat message ending in "…". When the sentence is
+  final the message is completed, and a moment later both the subtitle line
+  and the message switch to the translation.
+- Only the finished sentence is translated; the in-progress text is never
+  sent to the translator, so this costs nothing extra there.
+- The chat message is updated at most every 2.5 seconds while you talk, so
+  the chat is not flooded with edits; the subtitles update continuously.
+- Each sentence has its own subtitle line, so a translation that takes
+  longer lands on its line without shuffling the others.
+
+Transcript not appearing until you made a noise
+- I could not reproduce this against the service with recorded speech: a
+  10-second sentence was finalised about a second after it ended every time.
+  As insurance the app now keeps sending 1.5 seconds of "silence" after you
+  stop talking (was 0.7), which is what the service listens for to decide a
+  sentence is over. With live captions you will also now see whether the
+  service heard you at all, which will tell us more if it happens again.
+
+
+Translation stops working after a while (button had to be tapped twice)
+- The link to the transcription service was never reopened once it dropped.
+  It drops whenever nothing has been sent for about 45 seconds, and the app
+  sends nothing while the *other* person is talking — so whoever listens
+  longer (Ericka) lost it first. Everything said after that went into a dead
+  link and never came back. Tapping off and on happened to open a new one.
+- Now: after 45 seconds of silence the link is closed on purpose and the next
+  word you say opens a fresh one (about a second). A link that goes dead
+  mid-sentence is also noticed after 20 seconds of unanswered speech and
+  replaced. Verified against the live service with recorded Spanish clips:
+  close after idle, reconnect, and the last words before switching off are
+  all delivered.
+
+Translate button lit at call start but nothing happens
+- The button remembered your last choice for that contact and showed ON,
+  but nothing actually started the translation for it. It only ever started
+  when you tapped the button during the call.
+- Now: if it is saved as ON, translation starts by itself the moment the
+  call connects (not during ringing). If the contact has no language set any
+  more, the button shows OFF instead of lying.
+
+Ericka heard as two speakers
+- The service's speaker separation was splitting one voice in two, and
+  everything it called "speaker 2" was treated as a bystander: put in the
+  chat with a "Speaker 2" header and kept OFF the subtitles Scott sees. The
+  service has no setting to say "there is only one speaker", so speaker
+  separation is now switched off. Everything picked up by the microphone is
+  treated as the person holding the phone.
+- Side effect: someone else in the room speaking near the phone is now
+  captioned as you, without the "Speaker 2" header.
+
+Microphone missing from a video call — NOT fixed, needs one more data point
+- I did not find the cause in the code. The translation tap reads the mic
+  before the call sends it, so a check for next time it happens: look at the
+  chat.
+  - If the chat is filling with your transcript while the other person hears
+    nothing: the mic works and the audio is lost on the way out (mute, route,
+    or network). Tell me that, plus whether the Bose were connected.
+  - If the chat is ALSO empty while translation is on: the microphone input
+    itself is dead. Tell me which audio output was selected (speaker, phone,
+    Bose) and whether switching it brought the mic back.
+- Under the hood, the mic tap was also made safer: it now hands the audio off
+  immediately instead of doing work on the call's audio thread, and a race
+  between the audio thread and switching translation off was removed.
+
+Worth checking
+- Ericka: does translation now keep going for a whole call without touching
+  the button?
+- Both: is the button correct at the start of a call, and does translation
+  run without tapping it?
+- Ericka: do all of her lines now reach Scott's subtitles, with no
+  "Speaker 2" messages in the chat?
+- Both: do the live captions feel right, or is the moving text on the video
+  distracting? Does the "…" message ever get stuck without completing?
+- Does the stuck-until-noise problem still happen? If so, did the live
+  caption show the words as you spoke and then just not finalise?
+- After a long pause (a minute of listening), the first word spoken again
+  may take about a second longer than usual to appear: that is the fresh
+  link being opened. Say if it is noticeable.

@@ -42,6 +42,7 @@ final class CallControllerNodeV2: ViewControllerTracingNode, CallControllerNodeP
     // MARK: Swiftgram
     fileprivate var sgTranslationSession: SGCallTranslationSession?
     fileprivate var sgTranslationIsEnabled: Bool = false
+    fileprivate var sgDidAutoStartTranslation: Bool = false
     fileprivate var sgActionSheet: ActionSheetController?
     
     let isReady = Promise<Bool>()
@@ -598,6 +599,11 @@ final class CallControllerNodeV2: ViewControllerTracingNode, CallControllerNodeP
             }
             
             self.setupAudioOutputForVideoIfNeeded()
+            
+            // MARK: Swiftgram
+            if case .active = callState.state {
+                self.sgAutoStartTranslationIfNeeded()
+            }
         }
         
         if case let .terminated(_, _, reportRating) = callState.state {
@@ -1211,6 +1217,35 @@ extension CallControllerNodeV2 {
         }
     }
     
+    /// Honour the saved per-contact toggle once the call is actually up.
+    ///
+    /// The button is drawn from that setting from the first frame, but until
+    /// this existed nothing ever *started* the session for it: the button said
+    /// ON, no socket was opened and no microphone sink was installed, and the
+    /// only way to get going was to tap it off and on again. Starting is
+    /// deferred to the first active state so that ringing and connecting are
+    /// not transcribed, and so the audio device is certainly running.
+    private func sgAutoStartTranslationIfNeeded() {
+        if self.sgDidAutoStartTranslation {
+            return
+        }
+        self.sgDidAutoStartTranslation = true
+        
+        guard var callScreenState = self.callScreenState, callScreenState.translationEnabled == true, !self.sgTranslationIsEnabled else {
+            return
+        }
+        if SGSimpleSettings.shared.resolvedCallTranslationTargetLanguage(accountId: self.sgAccountId, peerId: self.sgPeerId) == nil {
+            // Saved as on, but there is nothing to translate into any more.
+            // Show it off rather than a lit button that does nothing.
+            callScreenState.translationEnabled = false
+            self.callScreenState = callScreenState
+            self.update(transition: .immediate)
+            return
+        }
+        self.sgTranslationIsEnabled = true
+        self.sgStartTranslation()
+    }
+    
     private func sgStartTranslation() {
         guard let targetLanguage = SGSimpleSettings.shared.resolvedCallTranslationTargetLanguage(accountId: self.sgAccountId, peerId: self.sgPeerId) else {
             return
@@ -1222,15 +1257,22 @@ extension CallControllerNodeV2 {
         } else {
             session = SGCallTranslationSession(account: self.call.context.account, peerId: self.call.peerId)
             session.onSubtitlesChanged = { [weak self] lines in
-                // The renderer is what the remote party actually sees; the
-                // screen state only drives the button.
+                // The renderer is what the remote party actually sees. The
+                // screen state keeps a copy but nothing on this screen draws
+                // it, and with partial results this fires several times a
+                // second — so no layout pass is forced for it.
                 OngoingCallContext.setTranslationSubtitles(lines)
                 guard let self, var callScreenState = self.callScreenState else {
                     return
                 }
                 callScreenState.translationSubtitles = lines
                 self.callScreenState = callScreenState
-                self.update(transition: .immediate)
+            }
+            session.onError = { message in
+                Logger.shared.log("SGCallTranslation", "error: \(message)")
+            }
+            session.onTransientError = { message in
+                Logger.shared.log("SGCallTranslation", message)
             }
             self.sgTranslationSession = session
         }

@@ -10,11 +10,21 @@ public enum SGModulateSTTConfig {
     /// batch API uses X-API-Key but the streaming API does not accept it.
     public static let endpoint: String = "wss://platform.modulate.ai/api/velma-2-stt-streaming"
 
-    /// Per-speaker segmentation. Of limited use for us: the tap is the local
-    /// microphone after echo cancellation, so there is normally exactly one
-    /// speaker. Left on because it costs nothing and does help when someone
-    /// else in the room talks.
-    public static let speakerDiarization: Bool = true
+    /// Per-speaker segmentation, off.
+    ///
+    /// The tap is the local microphone after echo cancellation, so there is
+    /// one speaker: the person holding the phone. With diarisation on, the
+    /// model regularly split that one voice into "speaker 1" and "speaker 2"
+    /// (seen consistently with one tester), and everything labelled 2 was
+    /// treated as a bystander — captioned in the chat with a speaker header
+    /// and kept off the subtitle strip — so half of what they said never
+    /// reached the other party. The API offers no way to cap the speaker
+    /// count (checked against the streaming spec, 2026-09-24), and speaker
+    /// numbers are only stable within one connection anyway, which the
+    /// reconnect logic now makes several per call. Off, the model reports no
+    /// speaker and every utterance is treated as the owner's, which is the
+    /// right answer nearly all of the time.
+    public static let speakerDiarization: Bool = false
 
     /// Accent is fed to the translator as a hint, which is the point of
     /// enabling it.
@@ -27,18 +37,33 @@ public enum SGModulateSTTConfig {
     public static let emotionSignal: Bool = false
     public static let accentSignal: Bool = true
 
-    /// Interim results. We only ever publish finalised utterances, so asking
-    /// for partials would just cost bandwidth.
-    public static let partialResults: Bool = false
+    /// Interim results. Shown live in the subtitle strip and the chat message
+    /// while the speaker is still talking, then replaced by the final
+    /// transcript and its translation. Partials are never translated: they
+    /// change with every frame and the translator would be paid to chase them.
+    public static let partialResults: Bool = true
 
     /// How long to keep reading after sending end-of-stream, waiting for the
     /// model to flush its final utterance. Without this the last thing the
     /// speaker said is lost every time translation is switched off.
     public static let drainTimeout: Double = 8.0
 
-    /// How long the socket may sit idle before we tear it down and reconnect
-    /// on the next utterance. Keeps a muted call from holding a socket open.
+    /// How long a socket may carry no audio before we end it (gracefully, so
+    /// the server flushes its last utterance) and reconnect on the next word.
+    /// The speech gate sends nothing while the other party talks, and neither
+    /// side of the protocol sends keepalives, so a listener's socket has to be
+    /// ended by us: left alone, URLSession times it out silently.
     public static let idleTimeout: TimeInterval = 45.0
+
+    /// Watchdog: milliseconds of audio a socket may carry without the server
+    /// saying anything before it is presumed dead, ended gracefully and
+    /// replaced. The server answers at every pause with an utterance, so only
+    /// a monologue with no pause at all trips this legitimately — and the cost
+    /// there is an utterance split in two, not lost. A socket URLSession has
+    /// silently timed out never answers again, and this is what catches it;
+    /// the speech sent into it before the limit is reached is lost, which is
+    /// why the limit is as short as a single breathless sentence allows.
+    public static let unansweredAudioLimitMs: Double = 20_000.0
 
     // MARK: Audio front-end
 
@@ -60,7 +85,16 @@ public enum SGModulateSTTConfig {
 
     /// Keep streaming for this long after speech stops, so trailing consonants
     /// and short pauses mid-sentence are not cut off.
-    public static let vadHangoverMs: Int = 700
+    ///
+    /// Also what lets the server *finish* an utterance: it endpoints on the
+    /// silence it is sent, and once the gate shuts it is sent nothing. Testers
+    /// saw long utterances hang until the speaker made any further noise —
+    /// which carries a little silence with it. Against the live API a 700 ms
+    /// tail was enough for a 10 s synthetic utterance, with digital silence
+    /// or room tone alike, so this is insurance for real microphones rather
+    /// than a reproduced fix: 1.5 s of tail costs nothing and leaves the
+    /// endpointer no excuse.
+    public static let vadHangoverMs: Int = 1500
 
     /// Send this much audio from *before* speech was detected. Energy VADs are
     /// inherently late, and without a pre-roll the first phoneme is clipped —

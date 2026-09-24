@@ -122,6 +122,26 @@ public enum SGCallMessageFormatter {
         return SGCallMessageBody(text: text, entities: entities)
     }
 
+    /// The chat message while the speaker is still talking: the transcript so
+    /// far with an ellipsis, and none of the metadata, which does not exist
+    /// yet. Built through `body` so a remote speaker's header and quote block
+    /// are the same as they will be once the utterance is final.
+    public static func partialBody(transcription: String, speakerNumber: Int?) -> SGCallMessageBody {
+        let transcription = transcription.trimmingCharacters(in: .whitespacesAndNewlines)
+        if transcription.isEmpty {
+            return SGCallMessageBody(text: "", entities: [])
+        }
+        return self.body(
+            transcription: transcription + " …",
+            detectedProperties: "",
+            speakerNumber: speakerNumber,
+            recognitionLatency: nil,
+            translation: nil,
+            translationLanguageName: nil,
+            translationLatency: nil
+        )
+    }
+
     /// "(en, accent: British · transcribed in 1.2s)", dropping whichever half
     /// is missing, and the whole line when both are.
     static func metaLine(properties: String, latency: Double?, verb: String) -> String? {

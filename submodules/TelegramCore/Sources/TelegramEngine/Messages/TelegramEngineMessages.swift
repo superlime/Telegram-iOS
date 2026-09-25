@@ -5,6 +5,7 @@ import SGOpenAIRealtimeTranslate
 import SGOpenAICasualTranslate
 import SGOpenAILunaTranslate
 import SGSimpleSettings
+import SGLogging
 import Foundation
 import SwiftSignalKit
 import Postbox
@@ -2074,7 +2075,8 @@ private func sgWrappedTranslateSingle(
             |> map { translated -> (String, [MessageTextEntity])? in
                 return (translated, [])
             }
-            |> mapError { _ -> TranslationError in
+            |> mapError { error -> TranslationError in
+                SGLogger.shared.log("SGTranslate", "OpenAI Realtime failed: \(error). Falling back to GTranslate")
                 return .generic
             }
         return realtimeSignal
@@ -2084,6 +2086,7 @@ private func sgWrappedTranslateSingle(
                         return (translated, [])
                     }
                     |> mapError { _ -> TranslationError in
+                        SGLogger.shared.log("SGTranslate", "GTranslate fallback also failed after OpenAI Realtime error")
                         return originalError
                     }
             }
@@ -2094,7 +2097,8 @@ private func sgWrappedTranslateSingle(
             |> map { translated -> (String, [MessageTextEntity])? in
                 return (translated, [])
             }
-            |> mapError { _ -> TranslationError in
+            |> mapError { error -> TranslationError in
+                SGLogger.shared.log("SGTranslate", "OpenAI Luna failed: \(error). Falling back to GTranslate")
                 return .generic
             }
         return lunaSignal
@@ -2104,6 +2108,7 @@ private func sgWrappedTranslateSingle(
                         return (translated, [])
                     }
                     |> mapError { _ -> TranslationError in
+                        SGLogger.shared.log("SGTranslate", "GTranslate fallback also failed after OpenAI Luna error")
                         return originalError
                     }
             }
@@ -2114,7 +2119,8 @@ private func sgWrappedTranslateSingle(
             |> map { translated -> (String, [MessageTextEntity])? in
                 return (translated, [])
             }
-            |> mapError { _ -> TranslationError in
+            |> mapError { error -> TranslationError in
+                SGLogger.shared.log("SGTranslate", "OpenAI Casual failed: \(error). Falling back to GTranslate")
                 return .generic
             }
         return casualSignal
@@ -2124,6 +2130,7 @@ private func sgWrappedTranslateSingle(
                         return (translated, [])
                     }
                     |> mapError { _ -> TranslationError in
+                        SGLogger.shared.log("SGTranslate", "GTranslate fallback also failed after OpenAI Casual error")
                         return originalError
                     }
             }
@@ -2134,7 +2141,8 @@ private func sgWrappedTranslateSingle(
             |> map { translated -> (String, [MessageTextEntity])? in
                 return (translated, [])
             }
-            |> mapError { _ -> TranslationError in
+            |> mapError { error -> TranslationError in
+                SGLogger.shared.log("SGTranslate", "OpenAI failed: \(error). Falling back to GTranslate")
                 return .generic
             }
         return openAISignal
@@ -2144,6 +2152,7 @@ private func sgWrappedTranslateSingle(
                         return (translated, [])
                     }
                     |> mapError { _ -> TranslationError in
+                        SGLogger.shared.log("SGTranslate", "GTranslate fallback also failed after OpenAI error")
                         return originalError
                     }
             }
@@ -2154,7 +2163,8 @@ private func sgWrappedTranslateSingle(
             |> map { translated -> (String, [MessageTextEntity])? in
                 return (translated, [])
             }
-            |> mapError { _ -> TranslationError in
+            |> mapError { error -> TranslationError in
+                SGLogger.shared.log("SGTranslate", "Azure failed: \(error). Falling back to GTranslate")
                 return .generic
             }
         return azureSignal
@@ -2164,6 +2174,7 @@ private func sgWrappedTranslateSingle(
                         return (translated, [])
                     }
                     |> mapError { _ -> TranslationError in
+                        SGLogger.shared.log("SGTranslate", "GTranslate fallback also failed after Azure error")
                         return originalError
                     }
             }
@@ -2193,7 +2204,8 @@ private func sgWrappedTranslateMultiple(
             |> map { translatedTexts -> [(String, [MessageTextEntity])] in
                 return translatedTexts.map({ ($0, []) })
             }
-            |> mapError { _ -> TranslationError in
+            |> mapError { error -> TranslationError in
+                SGLogger.shared.log("SGTranslate", "OpenAI Realtime failed: \(error). Falling back to GTranslate")
                 return .generic
             }
         return realtimeSignal
@@ -2204,6 +2216,7 @@ private func sgWrappedTranslateMultiple(
                             return (translated, [])
                         }
                         |> mapError { _ -> TranslationError in
+                            SGLogger.shared.log("SGTranslate", "GTranslate fallback also failed after OpenAI Realtime error")
                             return originalError
                         }
                 }
@@ -2216,7 +2229,8 @@ private func sgWrappedTranslateMultiple(
             |> map { translatedTexts -> [(String, [MessageTextEntity])] in
                 return translatedTexts.map({ ($0, []) })
             }
-            |> mapError { _ -> TranslationError in
+            |> mapError { error -> TranslationError in
+                SGLogger.shared.log("SGTranslate", "OpenAI Luna failed: \(error). Falling back to GTranslate")
                 return .generic
             }
         return lunaSignal
@@ -2227,6 +2241,7 @@ private func sgWrappedTranslateMultiple(
                             return (translated, [])
                         }
                         |> mapError { _ -> TranslationError in
+                            SGLogger.shared.log("SGTranslate", "GTranslate fallback also failed after OpenAI Luna error")
                             return originalError
                         }
                 }
@@ -2239,7 +2254,8 @@ private func sgWrappedTranslateMultiple(
             |> map { translatedTexts -> [(String, [MessageTextEntity])] in
                 return translatedTexts.map({ ($0, []) })
             }
-            |> mapError { _ -> TranslationError in
+            |> mapError { error -> TranslationError in
+                SGLogger.shared.log("SGTranslate", "OpenAI Casual failed: \(error). Falling back to GTranslate")
                 return .generic
             }
         return casualSignal
@@ -2250,6 +2266,7 @@ private func sgWrappedTranslateMultiple(
                             return (translated, [])
                         }
                         |> mapError { _ -> TranslationError in
+                            SGLogger.shared.log("SGTranslate", "GTranslate fallback also failed after OpenAI Casual error")
                             return originalError
                         }
                 }
@@ -2262,7 +2279,8 @@ private func sgWrappedTranslateMultiple(
             |> map { translatedTexts -> [(String, [MessageTextEntity])] in
                 return translatedTexts.map({ ($0, []) })
             }
-            |> mapError { _ -> TranslationError in
+            |> mapError { error -> TranslationError in
+                SGLogger.shared.log("SGTranslate", "OpenAI failed: \(error). Falling back to GTranslate")
                 return .generic
             }
         return openAISignal
@@ -2273,6 +2291,7 @@ private func sgWrappedTranslateMultiple(
                             return (translated, [])
                         }
                         |> mapError { _ -> TranslationError in
+                            SGLogger.shared.log("SGTranslate", "GTranslate fallback also failed after OpenAI error")
                             return originalError
                         }
                 }
@@ -2285,7 +2304,8 @@ private func sgWrappedTranslateMultiple(
             |> map { translatedTexts -> [(String, [MessageTextEntity])] in
                 return translatedTexts.map({ ($0, []) })
             }
-            |> mapError { _ -> TranslationError in
+            |> mapError { error -> TranslationError in
+                SGLogger.shared.log("SGTranslate", "Azure failed: \(error). Falling back to GTranslate")
                 return .generic
             }
         return azureSignal
@@ -2296,6 +2316,7 @@ private func sgWrappedTranslateMultiple(
                             return (translated, [])
                         }
                         |> mapError { _ -> TranslationError in
+                            SGLogger.shared.log("SGTranslate", "GTranslate fallback also failed after Azure error")
                             return originalError
                         }
                 }

@@ -1,5 +1,6 @@
 import Foundation
 import SwiftSignalKit
+import SGLogging
 
 // MARK: Swiftgram
 //
@@ -128,6 +129,7 @@ private func azureTranslateRequest(elements: [String], toLang: String) -> Signal
 
     let key: String = SGAzureTranslateCredentials.key
     if key.isEmpty {
+        SGLogger.shared.log("SGAzureTranslate", "No subscription key in this build, failing with .notConfigured")
         return .fail(.notConfigured)
     }
 
@@ -143,11 +145,13 @@ private func azureTranslateRequest(elements: [String], toLang: String) -> Signal
     components?.queryItems = queryItems
 
     guard let url: URL = components?.url else {
+        SGLogger.shared.log("SGAzureTranslate", "Malformed endpoint '\(SGAzureTranslateCredentials.endpoint)', failing with .notConfigured")
         return .fail(.notConfigured)
     }
 
     let body: [[String: String]] = elements.map { ["text": $0] }
     guard let bodyData: Data = try? JSONSerialization.data(withJSONObject: body, options: []) else {
+        SGLogger.shared.log("SGAzureTranslate", "Unable to serialize request body for \(elements.count) element(s)")
         return .fail(.network)
     }
 
@@ -161,20 +165,30 @@ private func azureTranslateRequest(elements: [String], toLang: String) -> Signal
         if !SGAzureTranslateCredentials.region.isEmpty {
             request.setValue(SGAzureTranslateCredentials.region, forHTTPHeaderField: "Ocp-Apim-Subscription-Region")
         }
-        request.setValue(UUID().uuidString, forHTTPHeaderField: "X-ClientTraceId")
+        // Azure echoes this id in its own diagnostics: logging it here is what
+        // makes a failure traceable on the service side.
+        let traceId: String = UUID().uuidString
+        request.setValue(traceId, forHTTPHeaderField: "X-ClientTraceId")
 
-        let task: URLSessionDataTask = sgAzureTranslateSession.dataTask(with: request, completionHandler: { data, response, _ in
+        let task: URLSessionDataTask = sgAzureTranslateSession.dataTask(with: request, completionHandler: { data, response, error in
             let _ = completed.swap(true)
 
             guard let response: HTTPURLResponse = response as? HTTPURLResponse else {
+                SGLogger.shared.log("SGAzureTranslate", "[\(traceId)] No HTTP response for \(elements.count) element(s) -> \(toLang): \(error.map({ String(describing: $0) }) ?? "unknown transport error")")
                 subscriber.putError(.network)
                 return
             }
             guard response.statusCode == 200 else {
+                // The error body carries Azure's own numeric code and message,
+                // which is the only thing that distinguishes a bad key from a
+                // throttle from an unsupported language. It contains no message text.
+                let errorBody: String = data.flatMap({ String(data: $0.prefix(300), encoding: .utf8) }) ?? "<no body>"
+                SGLogger.shared.log("SGAzureTranslate", "[\(traceId)] HTTP \(response.statusCode) for \(elements.count) element(s) -> \(toLang): \(errorBody)")
                 subscriber.putError(.api(response.statusCode))
                 return
             }
             guard let data: Data = data, let parsed = try? JSONSerialization.jsonObject(with: data, options: []) as? [[String: Any]] else {
+                SGLogger.shared.log("SGAzureTranslate", "[\(traceId)] HTTP 200 but response body is not a JSON array (\(data?.count ?? 0) bytes)")
                 subscriber.putError(.network)
                 return
             }
@@ -182,10 +196,12 @@ private func azureTranslateRequest(elements: [String], toLang: String) -> Signal
             var results: [String] = []
             for entry in parsed {
                 guard let translations = entry["translations"] as? [[String: Any]] else {
+                    SGLogger.shared.log("SGAzureTranslate", "[\(traceId)] Response entry has no 'translations' array")
                     subscriber.putError(.network)
                     return
                 }
                 guard let first = translations.first, let text = first["text"] as? String else {
+                    SGLogger.shared.log("SGAzureTranslate", "[\(traceId)] Response entry has no usable 'text'")
                     subscriber.putError(.network)
                     return
                 }
@@ -193,6 +209,7 @@ private func azureTranslateRequest(elements: [String], toLang: String) -> Signal
             }
 
             guard results.count == elements.count else {
+                SGLogger.shared.log("SGAzureTranslate", "[\(traceId)] Element count mismatch: sent \(elements.count), got \(results.count)")
                 subscriber.putError(.network)
                 return
             }

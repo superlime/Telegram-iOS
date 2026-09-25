@@ -1,9 +1,17 @@
 import Foundation
 import SwiftSignalKit
 import SwiftSoup
+import SGLogging
 
+// MARK: Swiftgram
+// The scraped endpoint fails in ways that call for different fixes, and a single
+// `.network` case made them indistinguishable: a transport failure, a status code
+// (429 is the common one - gtranslate() fires one request per line), and a 200
+// whose HTML holds no result container, which means the scrape itself has broken.
 public enum TranslateFetchError {
     case network
+    case api(Int)
+    case parseFailed
 }
 
 private let sgTranslateSessionConfiguration: URLSessionConfiguration = .ephemeral
@@ -63,7 +71,7 @@ public func requestTranslateUrl(url: URL) -> Signal<String, TranslateFetchError>
         var request: URLRequest = URLRequest(url: url)
         request.httpMethod = "GET"
         request.setValue("Mozilla/4.0 (compatible;MSIE 6.0;Windows NT 5.1;SV1;.NET CLR 1.1.4322;.NET CLR 2.0.50727;.NET CLR 3.0.04506.30)", forHTTPHeaderField: "User-Agent")
-        let downloadTask: URLSessionDataTask = sgTranslateSession.dataTask(with: request, completionHandler: { data, response, _ in
+        let downloadTask: URLSessionDataTask = sgTranslateSession.dataTask(with: request, completionHandler: { data, response, error in
             let _ = completed.swap(true)
             if let response: HTTPURLResponse = response as? HTTPURLResponse {
                 if response.statusCode == 200 {
@@ -72,15 +80,20 @@ public func requestTranslateUrl(url: URL) -> Signal<String, TranslateFetchError>
                             subscriber.putNext(result)
                             subscriber.putCompletion()
                         } else {
-                            subscriber.putError(.network)
+                            SGLogger.shared.log("SGGTranslate", "HTTP 200 but body is not UTF-8 (\(data.count) bytes)")
+                            subscriber.putError(.parseFailed)
                         }
                     } else {
-                        subscriber.putError(.network)
+                        SGLogger.shared.log("SGGTranslate", "HTTP 200 with an empty body")
+                        subscriber.putError(.parseFailed)
                     }
                 } else {
-                    subscriber.putError(.network)
+                    // 429 here means the per-line request fan-out has been throttled.
+                    SGLogger.shared.log("SGGTranslate", "HTTP \(response.statusCode) from translate.google.com")
+                    subscriber.putError(.api(response.statusCode))
                 }
             } else {
+                SGLogger.shared.log("SGGTranslate", "No HTTP response: \(error.map({ String(describing: $0) }) ?? "unknown transport error")")
                 subscriber.putError(.network)
             }
         })
@@ -128,13 +141,16 @@ public func gtranslateSentence(_ text: String, _ toLang: String) -> Signal<Strin
         translateDisposable = translateSignal.start(next: { translatedHtml in
             let result: String = parseTranslateResponse(translatedHtml)
             if result.isEmpty {
-                subscriber.putError(.network)
+                // Neither div.result-container nor div.t0 was present: either the
+                // markup changed or a consent/captcha interstitial came back instead.
+                SGLogger.shared.log("SGGTranslate", "No result container in a \(translatedHtml.count)-character response, scrape needs updating")
+                subscriber.putError(.parseFailed)
             } else {
                 subscriber.putNext(result)
                 subscriber.putCompletion()
             }
-        }, error: { _ in
-            subscriber.putError(.network)
+        }, error: { error in
+            subscriber.putError(error)
         })
 
         return ActionDisposable {

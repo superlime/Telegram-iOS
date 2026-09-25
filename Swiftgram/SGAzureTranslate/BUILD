@@ -11,6 +11,7 @@ swift_library(
     ],
     deps = [
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
+        "//Swiftgram/SGLogging:SGLogging",
     ],
     visibility = [
         "//visibility:public",

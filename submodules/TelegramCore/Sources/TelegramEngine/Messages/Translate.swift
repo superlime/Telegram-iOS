@@ -5,6 +5,7 @@ import SGOpenAIRealtimeTranslate
 import SGOpenAICasualTranslate
 import SGOpenAILunaTranslate
 import SGSimpleSettings
+import SGLogging
 import SGTranslationLangFix
 
 import Foundation
@@ -494,7 +495,8 @@ private func _internal_translateMessagesByPeerId(account: Account, peerId: Engin
 private func sgTranslateViaText(_ text: String, _ toLang: String, _ context: [SGCasualTranslateContextMessage] = []) -> Signal<String, TranslateFetchError> {
     if SGSimpleSettings.shared.translationBackend == SGSimpleSettings.TranslationBackend.openaiRealtime.rawValue, isOpenAIRealtimeTranslateConfigured {
         return openAIRealtimeTranslate(text, toLang)
-            |> mapError { _ -> TranslateFetchError in
+            |> mapError { error -> TranslateFetchError in
+                SGLogger.shared.log("SGTranslate", "OpenAI Realtime failed: \(error). Falling back to GTranslate")
                 return .network
             }
             |> `catch` { _ -> Signal<String, TranslateFetchError> in
@@ -503,7 +505,8 @@ private func sgTranslateViaText(_ text: String, _ toLang: String, _ context: [SG
     }
     if SGSimpleSettings.shared.translationBackend == SGSimpleSettings.TranslationBackend.openaiLuna.rawValue, isOpenAILunaTranslateConfigured {
         return openAILunaTranslate(text, toLang, context: context)
-            |> mapError { _ -> TranslateFetchError in
+            |> mapError { error -> TranslateFetchError in
+                SGLogger.shared.log("SGTranslate", "OpenAI Luna failed: \(error). Falling back to GTranslate")
                 return .network
             }
             |> `catch` { _ -> Signal<String, TranslateFetchError> in
@@ -512,7 +515,8 @@ private func sgTranslateViaText(_ text: String, _ toLang: String, _ context: [SG
     }
     if SGSimpleSettings.shared.translationBackend == SGSimpleSettings.TranslationBackend.openaiCasual.rawValue, isOpenAICasualTranslateConfigured {
         return openAICasualTranslate(text, toLang, context: context)
-            |> mapError { _ -> TranslateFetchError in
+            |> mapError { error -> TranslateFetchError in
+                SGLogger.shared.log("SGTranslate", "OpenAI Casual failed: \(error). Falling back to GTranslate")
                 return .network
             }
             |> `catch` { _ -> Signal<String, TranslateFetchError> in
@@ -521,7 +525,8 @@ private func sgTranslateViaText(_ text: String, _ toLang: String, _ context: [SG
     }
     if SGSimpleSettings.shared.translationBackend == SGSimpleSettings.TranslationBackend.openai.rawValue, isOpenAITranslateConfigured {
         return openAITranslate(text, toLang)
-            |> mapError { _ -> TranslateFetchError in
+            |> mapError { error -> TranslateFetchError in
+                SGLogger.shared.log("SGTranslate", "OpenAI failed: \(error). Falling back to GTranslate")
                 return .network
             }
             |> `catch` { _ -> Signal<String, TranslateFetchError> in
@@ -530,7 +535,8 @@ private func sgTranslateViaText(_ text: String, _ toLang: String, _ context: [SG
     }
     if SGSimpleSettings.shared.translationBackend == SGSimpleSettings.TranslationBackend.azure.rawValue, isAzureTranslateConfigured {
         return azureTranslate(text, toLang)
-            |> mapError { _ -> TranslateFetchError in
+            |> mapError { error -> TranslateFetchError in
+                SGLogger.shared.log("SGTranslate", "Azure failed: \(error). Falling back to GTranslate")
                 return .network
             }
             |> `catch` { _ -> Signal<String, TranslateFetchError> in

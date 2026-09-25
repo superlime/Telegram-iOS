@@ -197,8 +197,17 @@ public final class SGTranslationCompareModel: ObservableObject {
             } else {
                 strongSelf.update(index, .success(text: text, milliseconds: elapsedMilliseconds(since: started)))
             }
-        }, error: { [weak self] _ in
-            self?.update(index, .failure(reason: "network error", milliseconds: elapsedMilliseconds(since: started)))
+        }, error: { [weak self] error in
+            let reason: String
+            switch error {
+            case .network:
+                reason = "network error"
+            case let .api(statusCode):
+                reason = statusCode == 429 ? "HTTP 429 (rate limited)" : "HTTP \(statusCode)"
+            case .parseFailed:
+                reason = "scrape failed (markup changed or interstitial)"
+            }
+            self?.update(index, .failure(reason: reason, milliseconds: elapsedMilliseconds(since: started)))
         })
         self.disposables.append(disposable)
     }

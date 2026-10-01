@@ -291,3 +291,31 @@
 "Settings.NY.Style.snow" = "Snow";
 "Settings.NY.Style.lightning" = "Lightning";
 "Settings.NY.Notice" = "Available for a limited time only!";
+
+/* Cooler video calls */
+"Settings.CallVideo.Header" = "VIDEO CALL HEAT";
+"Settings.CallVideo.Resolution" = "Camera Resolution";
+"Settings.CallVideo.Resolution.p720" = "720p (Default)";
+"Settings.CallVideo.Resolution.p540" = "540p";
+"Settings.CallVideo.Resolution.p480" = "480p";
+"Settings.CallVideo.Resolution.p360" = "360p (Coolest)";
+"Settings.CallVideo.FrameRate" = "Frame Rate";
+"Settings.CallVideo.FrameRate.fps30" = "30 fps (Default)";
+"Settings.CallVideo.FrameRate.fps24" = "24 fps";
+"Settings.CallVideo.FrameRate.fps20" = "20 fps";
+"Settings.CallVideo.FrameRate.fps15" = "15 fps";
+"Settings.CallVideo.FrameRate.fps12" = "12 fps (Coolest)";
+"Settings.CallVideo.MaxBitrate" = "Video Bitrate";
+"Settings.CallVideo.MaxBitrate.standard" = "1 Mbps (Default)";
+"Settings.CallVideo.MaxBitrate.kbps700" = "700 kbps";
+"Settings.CallVideo.MaxBitrate.kbps500" = "500 kbps";
+"Settings.CallVideo.MaxBitrate.kbps350" = "350 kbps";
+"Settings.CallVideo.MaxBitrate.kbps250" = "250 kbps (Coolest)";
+"Settings.CallVideo.AutoThrottle" = "Lower Quality When Hot";
+"Settings.CallVideo.DimScreen" = "Dim Screen";
+"Settings.CallVideo.DimScreen.off" = "Off";
+"Settings.CallVideo.DimScreen.whenHot" = "When Hot";
+"Settings.CallVideo.DimScreen.always" = "Always";
+"Settings.CallVideo.ReduceEffects" = "Reduce Call Screen Effects";
+"Settings.CallVideo.ShowThermalStatus" = "Show Phone Temperature";
+"Settings.CallVideo.Notice" = "Lower resolution, frame rate and bitrate make the phone run cooler on long video calls, at the cost of picture quality. Lower Quality When Hot steps the video down further when iOS reports the phone is hot, and restores it once it cools. Charging during a call, or a phone case, adds a lot of heat.";

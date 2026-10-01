@@ -39,6 +39,9 @@ sources = glob([
     # MARK: Swiftgram — replaced by the vendored copy in Sources/, which
     # adds the live-translation subtitle blend. See that file for why.
     "tgcalls/tgcalls/platform/darwin/VideoCameraCapturer.mm",
+    # MARK: Swiftgram — replaced by the vendored copy in Sources/, which
+    # applies the cooler-video-call limits (SGCallVideoLimits).
+    "tgcalls/tgcalls/platform/darwin/DarwinInterface.mm",
     "tgcalls/tgcalls/platform/darwin/VideoMetalViewMac.*",
     "tgcalls/tgcalls/platform/darwin/VideoSampleBufferViewMac.*",
     "tgcalls/tgcalls/platform/darwin/GLVideoView.*",
@@ -78,6 +81,9 @@ sources = glob([
     # MARK: Swiftgram — replaced by the vendored copy in Sources/, which
     # adds the live-translation subtitle blend. See that file for why.
     "tgcalls/tgcalls/platform/darwin/VideoCameraCapturer.mm",
+    # MARK: Swiftgram — replaced by the vendored copy in Sources/, which
+    # applies the cooler-video-call limits (SGCallVideoLimits).
+    "tgcalls/tgcalls/platform/darwin/DarwinInterface.mm",
     "tgcalls/tgcalls/platform/darwin/VideoMetalViewMac.*",
     "tgcalls/tgcalls/platform/darwin/VideoSampleBufferViewMac.*",
     "tgcalls/tgcalls/platform/darwin/GLVideoView.*",

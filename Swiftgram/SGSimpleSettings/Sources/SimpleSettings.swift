@@ -181,6 +181,79 @@ public class SGSimpleSettings {
         case warnOnStoriesOpen
         case showProfileId
         case sendWithReturnKey
+        // MARK: Swiftgram - cooler video calls
+        case callVideoResolution
+        case callVideoFrameRate
+        case callVideoMaxBitrate
+        case callThermalAutoThrottle
+        case callDimScreen
+        case callReduceVideoEffects
+        case callShowThermalStatus
+    }
+
+    // MARK: Swiftgram - cooler video calls
+    // Limits applied to the outgoing camera video of a call. Each lower value
+    // means less work for the camera ISP, the CPU colour conversion, the
+    // hardware encoder and the radio, which is what keeps a phone cool on a
+    // long video call. The first case of each enum is stock Telegram behaviour.
+
+    /// Largest short side of the outgoing video, in pixels.
+    public enum CallVideoResolution: String, CaseIterable {
+        case p720
+        case p540
+        case p480
+        case p360
+
+        public var maxShortSide: Int32 {
+            switch self {
+            case .p720: return 0
+            case .p540: return 540
+            case .p480: return 480
+            case .p360: return 360
+            }
+        }
+    }
+
+    public enum CallVideoFrameRate: String, CaseIterable {
+        case fps30
+        case fps24
+        case fps20
+        case fps15
+        case fps12
+
+        public var maxFps: Int32 {
+            switch self {
+            case .fps30: return 0
+            case .fps24: return 24
+            case .fps20: return 20
+            case .fps15: return 15
+            case .fps12: return 12
+            }
+        }
+    }
+
+    public enum CallVideoMaxBitrate: String, CaseIterable {
+        case standard
+        case kbps700
+        case kbps500
+        case kbps350
+        case kbps250
+
+        public var maxKbps: Int32 {
+            switch self {
+            case .standard: return 0
+            case .kbps700: return 700
+            case .kbps500: return 500
+            case .kbps350: return 350
+            case .kbps250: return 250
+            }
+        }
+    }
+
+    public enum CallDimScreen: String, CaseIterable {
+        case off
+        case whenHot
+        case always
     }
     
     public enum DownloadSpeedBoostValues: String, CaseIterable {
@@ -348,7 +421,14 @@ public class SGSimpleSettings {
         Keys.hideStories.rawValue: false,
         Keys.warnOnStoriesOpen.rawValue: false,
         Keys.showProfileId.rawValue: true,
-        Keys.sendWithReturnKey.rawValue: false
+        Keys.sendWithReturnKey.rawValue: false,
+        Keys.callVideoResolution.rawValue: CallVideoResolution.p720.rawValue,
+        Keys.callVideoFrameRate.rawValue: CallVideoFrameRate.fps30.rawValue,
+        Keys.callVideoMaxBitrate.rawValue: CallVideoMaxBitrate.standard.rawValue,
+        Keys.callThermalAutoThrottle.rawValue: true,
+        Keys.callDimScreen.rawValue: CallDimScreen.off.rawValue,
+        Keys.callReduceVideoEffects.rawValue: false,
+        Keys.callShowThermalStatus.rawValue: true
     ]
     
     public static let groupDefaultValues: [String: Any] = [
@@ -634,6 +714,46 @@ public class SGSimpleSettings {
     
     @UserDefault(key: Keys.tabBarSearchEnabled.rawValue)
     public var tabBarSearchEnabled: Bool
+
+    // MARK: Swiftgram - cooler video calls
+    @UserDefault(key: Keys.callVideoResolution.rawValue)
+    public var callVideoResolution: String
+
+    @UserDefault(key: Keys.callVideoFrameRate.rawValue)
+    public var callVideoFrameRate: String
+
+    @UserDefault(key: Keys.callVideoMaxBitrate.rawValue)
+    public var callVideoMaxBitrate: String
+
+    @UserDefault(key: Keys.callThermalAutoThrottle.rawValue)
+    public var callThermalAutoThrottle: Bool
+
+    @UserDefault(key: Keys.callDimScreen.rawValue)
+    public var callDimScreen: String
+
+    @UserDefault(key: Keys.callReduceVideoEffects.rawValue)
+    public var callReduceVideoEffects: Bool
+
+    @UserDefault(key: Keys.callShowThermalStatus.rawValue)
+    public var callShowThermalStatus: Bool
+}
+
+extension SGSimpleSettings {
+    public var callVideoResolutionEnum: CallVideoResolution {
+        return CallVideoResolution(rawValue: self.callVideoResolution) ?? .p720
+    }
+
+    public var callVideoFrameRateEnum: CallVideoFrameRate {
+        return CallVideoFrameRate(rawValue: self.callVideoFrameRate) ?? .fps30
+    }
+
+    public var callVideoMaxBitrateEnum: CallVideoMaxBitrate {
+        return CallVideoMaxBitrate(rawValue: self.callVideoMaxBitrate) ?? .standard
+    }
+
+    public var callDimScreenEnum: CallDimScreen {
+        return CallDimScreen(rawValue: self.callDimScreen) ?? .off
+    }
 }
 
 extension SGSimpleSettings {

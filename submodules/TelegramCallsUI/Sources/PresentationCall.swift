@@ -13,6 +13,8 @@ import UniversalMediaPlayer
 import AccountContext
 import DeviceProximity
 import PhoneNumberFormat
+// MARK: Swiftgram
+import SGCallThermal
 
 public final class PresentationCallImpl: PresentationCall {
     public let context: AccountContext
@@ -62,6 +64,8 @@ public final class PresentationCallImpl: PresentationCall {
     private var reportedIncomingCall = false
     
     private var batteryLevelDisposable: Disposable?
+    // MARK: Swiftgram
+    private var sgThermalMonitorStarted = false
     
     private var callWasActive = false
     private var shouldPresentCallRating = false
@@ -443,6 +447,12 @@ public final class PresentationCallImpl: PresentationCall {
     }
     
     deinit {
+        // MARK: Swiftgram
+        if self.sgThermalMonitorStarted {
+            Queue.mainQueue().async {
+                SGCallThermalMonitor.shared.stop()
+            }
+        }
         self.audioSessionShouldBeActiveDisposable?.dispose()
         self.audioSessionActiveDisposable?.dispose()
         self.sessionStateDisposable?.dispose()
@@ -505,6 +515,8 @@ public final class PresentationCallImpl: PresentationCall {
         self.reportedIncomingCall = false
         self.batteryLevelDisposable?.dispose()
         self.batteryLevelDisposable = nil
+        // MARK: Swiftgram
+        self.sgStopThermalMonitor()
         self.callWasActive = false
         self.shouldPresentCallRating = false
         self.previousVideoState = nil
@@ -1218,6 +1230,8 @@ public final class PresentationCallImpl: PresentationCall {
                             
                             let ongoingContext = OngoingCallContext(account: self.context.account, callSessionManager: self.callSessionManager, callId: id, internalId: self.internalId, proxyServer: proxyServer, initialNetworkType: self.currentNetworkType, updatedNetworkType: self.updatedNetworkType, serializedData: self.serializedData, dataSaving: dataSaving, key: key, isOutgoing: sessionState.isOutgoing, video: self.videoCapturer, connections: updatedConnections, maxLayer: maxLayer, version: version, customParameters: customParameters, allowP2P: allowsP2P, enableTCP: self.enableTCP, enableStunMarking: self.enableStunMarking, audioSessionActive: contextAudioSessionActive, logName: logName, preferredVideoCodec: self.preferredVideoCodec, audioDevice: self.sharedAudioContext?.audioDevice)
                             self.ongoingContext = ongoingContext
+                            // MARK: Swiftgram
+                            self.sgStartThermalMonitor()
                             ongoingContext.setIsMuted(self.isMutedValue)
                             if let requestedVideoAspect = self.requestedVideoAspect {
                                 ongoingContext.setRequestedVideoAspect(requestedVideoAspect)
@@ -1278,6 +1292,8 @@ public final class PresentationCallImpl: PresentationCall {
                 self.audioSessionShouldBeActive.set(true)
             case let .terminated(_, _, options):
                 self.audioSessionShouldBeActive.set(true)
+                // MARK: Swiftgram
+                self.sgStopThermalMonitor()
                 if wasActive {
                     let debugLogValue = Promise<String?>()
                     if let conferenceCallContext = self.conferenceCallContext {
@@ -1933,4 +1949,28 @@ func sampleBufferFromPixelBuffer(pixelBuffer: CVPixelBuffer) -> CMSampleBuffer? 
     dict[kCMSampleAttachmentKey_DisplayImmediately as NSString] = true as NSNumber
 
     return sampleBuffer
+}
+
+// MARK: Swiftgram - cooler video calls
+extension PresentationCallImpl {
+    /// Start thermal monitoring and the call-video limits for this call. Owned
+    /// here rather than by the call screen so throttling keeps working while
+    /// the call UI is minimised.
+    fileprivate func sgStartThermalMonitor() {
+        if self.sgThermalMonitorStarted {
+            return
+        }
+        self.sgThermalMonitorStarted = true
+        SGCallThermalMonitor.shared.start(applyLimits: { limits in
+            OngoingCallContext.setSwiftgramVideoLimits(maxShortSide: limits.maxShortSide, maxFps: limits.maxFps, maxBitrateKbps: limits.maxBitrateKbps)
+        })
+    }
+
+    fileprivate func sgStopThermalMonitor() {
+        if !self.sgThermalMonitorStarted {
+            return
+        }
+        self.sgThermalMonitorStarted = false
+        SGCallThermalMonitor.shared.stop()
+    }
 }

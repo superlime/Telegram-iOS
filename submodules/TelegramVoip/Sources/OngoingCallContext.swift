@@ -889,6 +889,15 @@ public final class OngoingCallContext {
     public static func setTranslationSubtitles(_ lines: [String]) {
         SGCallSubtitleRenderer.shared.setLines(lines)
     }
+
+    // MARK: Swiftgram
+    /// Cap the outgoing camera video, to keep the phone cool on long calls.
+    /// Pass 0 for any value to remove that limit. Process-wide for the same
+    /// reason as `setTranslationSubtitles`; the caller resets it to all zeros
+    /// when the call ends.
+    public static func setSwiftgramVideoLimits(maxShortSide: Int32, maxFps: Int32, maxBitrateKbps: Int32) {
+        SGCallVideoLimits.shared.setMaxShortSide(maxShortSide, maxFps: maxFps, maxBitrateKbps: maxBitrateKbps)
+    }
     
     public let callId: CallId
     public let internalId: CallSessionInternalId

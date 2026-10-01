@@ -1,0 +1,487 @@
+diff --git a/tgcalls/platform/darwin/DarwinInterface.mm b/tgcalls/platform/darwin/DarwinInterface.mm
+index fda2130..b2ba1ed 100644
+--- a/tgcalls/platform/darwin/DarwinInterface.mm
++++ b/tgcalls/platform/darwin/DarwinInterface.mm
+@@ -31,6 +31,10 @@
+ 
+ #include <sys/sysctl.h>
+ 
++// MARK: Swiftgram
++#import <TgVoipWebrtc/SGCallVideoLimits.h>
++#include "api/video/video_codec_constants.h"
++
+ namespace tgcalls {
+ 
+ std::unique_ptr<webrtc::VideoDecoderFactory> CustomObjCToNativeVideoDecoderFactory(
+@@ -66,7 +70,176 @@
+ void DarwinInterface::configurePlatformAudio(int numChanels) {
+ }
+ 
++// MARK: Swiftgram
++namespace {
++
++/// Forwards everything to the wrapped encoder, except that SetRates is scaled
++/// down to SGCallVideoLimits.maxBitrateKbps / maxFps. Reads the limits on each
++/// call, and re-applies the last rates from Encode when they change, so a new
++/// limit takes effect on the next frame instead of the next bandwidth update.
++class SGLimitingVideoEncoder : public webrtc::VideoEncoder {
++public:
++    explicit SGLimitingVideoEncoder(std::unique_ptr<webrtc::VideoEncoder> encoder) : _encoder(std::move(encoder)) {
++    }
++
++    void SetFecControllerOverride(webrtc::FecControllerOverride *fec_controller_override) override {
++        _encoder->SetFecControllerOverride(fec_controller_override);
++    }
++
++    int32_t InitEncode(const webrtc::VideoCodec *codec_settings, int32_t number_of_cores, size_t max_payload_size) override {
++        return _encoder->InitEncode(codec_settings, number_of_cores, max_payload_size);
++    }
++
++    int InitEncode(const webrtc::VideoCodec *codec_settings, const webrtc::VideoEncoder::Settings &settings) override {
++        return _encoder->InitEncode(codec_settings, settings);
++    }
++
++    int32_t RegisterEncodeCompleteCallback(webrtc::EncodedImageCallback *callback) override {
++        return _encoder->RegisterEncodeCompleteCallback(callback);
++    }
++
++    int32_t Release() override {
++        _hasRates = false;
++        return _encoder->Release();
++    }
++
++    int32_t Encode(const webrtc::VideoFrame &frame, const std::vector<webrtc::VideoFrameType> *frame_types) override {
++        if (_hasRates && [SGCallVideoLimits shared].generation != _appliedGeneration) {
++            applyRates();
++        }
++        return _encoder->Encode(frame, frame_types);
++    }
++
++    void SetRates(const webrtc::VideoEncoder::RateControlParameters &parameters) override {
++        _lastRates = parameters;
++        _hasRates = true;
++        applyRates();
++    }
++
++    void OnPacketLossRateUpdate(float packet_loss_rate) override {
++        _encoder->OnPacketLossRateUpdate(packet_loss_rate);
++    }
++
++    void OnRttUpdate(int64_t rtt_ms) override {
++        _encoder->OnRttUpdate(rtt_ms);
++    }
++
++    void OnLossNotification(const webrtc::VideoEncoder::LossNotification &loss_notification) override {
++        _encoder->OnLossNotification(loss_notification);
++    }
++
++    webrtc::VideoEncoder::EncoderInfo GetEncoderInfo() const override {
++        return _encoder->GetEncoderInfo();
++    }
++
++private:
++    static webrtc::VideoBitrateAllocation scaled(const webrtc::VideoBitrateAllocation &allocation, double factor) {
++        webrtc::VideoBitrateAllocation result = allocation;
++        for (size_t spatial = 0; spatial < webrtc::kMaxSpatialLayers; spatial++) {
++            for (size_t temporal = 0; temporal < webrtc::kMaxTemporalStreams; temporal++) {
++                if (allocation.HasBitrate(spatial, temporal)) {
++                    result.SetBitrate(spatial, temporal, (uint32_t)(allocation.GetBitrate(spatial, temporal) * factor));
++                }
++            }
++        }
++        return result;
++    }
++
++    void applyRates() {
++        SGCallVideoLimits *limits = [SGCallVideoLimits shared];
++        _appliedGeneration = limits.generation;
++        const int32_t maxKbps = limits.maxBitrateKbps;
++        const int32_t maxFps = limits.maxFps;
++
++        webrtc::VideoEncoder::RateControlParameters rates = _lastRates;
++        const uint32_t requestedBps = rates.bitrate.get_sum_bps();
++        uint32_t appliedBps = requestedBps;
++        if (maxKbps > 0) {
++            const uint32_t capBps = (uint32_t)maxKbps * 1000;
++            if (rates.bitrate.get_sum_bps() > capBps) {
++                rates.bitrate = scaled(rates.bitrate, (double)capBps / (double)rates.bitrate.get_sum_bps());
++            }
++            if (rates.target_bitrate.get_sum_bps() > capBps) {
++                rates.target_bitrate = scaled(rates.target_bitrate, (double)capBps / (double)rates.target_bitrate.get_sum_bps());
++            }
++            appliedBps = rates.bitrate.get_sum_bps();
++        }
++        if (maxFps > 0 && rates.framerate_fps > (double)maxFps) {
++            rates.framerate_fps = (double)maxFps;
++        }
++
++        // Log only when the clamp starts, stops, or the cap changes; SetRates
++        // runs on every bandwidth-estimate update.
++        const bool isClamped = appliedBps < requestedBps;
++        if (isClamped != _wasClamped || (isClamped && maxKbps != _loggedCapKbps)) {
++            _wasClamped = isClamped;
++            _loggedCapKbps = maxKbps;
++            if (isClamped) {
++                NSLog(@"[SGCallVideoLimits] encoder bitrate clamped %u -> %u kbit/s (cap %d)", requestedBps / 1000, appliedBps / 1000, maxKbps);
++            } else {
++                NSLog(@"[SGCallVideoLimits] encoder bitrate unclamped at %u kbit/s", requestedBps / 1000);
++            }
++        }
++
++        _encoder->SetRates(rates);
++    }
++
++    std::unique_ptr<webrtc::VideoEncoder> _encoder;
++    webrtc::VideoEncoder::RateControlParameters _lastRates;
++    bool _hasRates = false;
++    int64_t _appliedGeneration = -1;
++    bool _wasClamped = false;
++    int32_t _loggedCapKbps = 0;
++};
++
++class SGLimitingVideoEncoderFactory : public webrtc::VideoEncoderFactory {
++public:
++    explicit SGLimitingVideoEncoderFactory(std::unique_ptr<webrtc::VideoEncoderFactory> factory) : _factory(std::move(factory)) {
++    }
++
++    std::vector<webrtc::SdpVideoFormat> GetSupportedFormats() const override {
++        return _factory->GetSupportedFormats();
++    }
++
++    std::vector<webrtc::SdpVideoFormat> GetImplementations() const override {
++        return _factory->GetImplementations();
++    }
++
++    webrtc::VideoEncoderFactory::CodecSupport QueryCodecSupport(const webrtc::SdpVideoFormat &format, absl::optional<std::string> scalability_mode) const override {
++        return _factory->QueryCodecSupport(format, scalability_mode);
++    }
++
++    std::unique_ptr<webrtc::VideoEncoder> CreateVideoEncoder(const webrtc::SdpVideoFormat &format) override {
++        auto encoder = _factory->CreateVideoEncoder(format);
++        if (!encoder) {
++            return nullptr;
++        }
++        return std::make_unique<SGLimitingVideoEncoder>(std::move(encoder));
++    }
++
++    std::unique_ptr<webrtc::VideoEncoderFactory::EncoderSelectorInterface> GetEncoderSelector() const override {
++        return _factory->GetEncoderSelector();
++    }
++
++private:
++    std::unique_ptr<webrtc::VideoEncoderFactory> _factory;
++};
++
++}
++
++static std::unique_ptr<webrtc::VideoEncoderFactory> sgMakeUpstreamVideoEncoderFactory(bool preferHardwareEncoding, bool isScreencast);
++
+ std::unique_ptr<webrtc::VideoEncoderFactory> DarwinInterface::makeVideoEncoderFactory(bool preferHardwareEncoding, bool isScreencast) {
++    // MARK: Swiftgram: screencasts keep upstream behaviour; the limits are
++    // about the camera.
++    if (!isScreencast) {
++        return std::make_unique<SGLimitingVideoEncoderFactory>(sgMakeUpstreamVideoEncoderFactory(preferHardwareEncoding, isScreencast));
++    }
++    return sgMakeUpstreamVideoEncoderFactory(preferHardwareEncoding, isScreencast);
++}
++
++// MARK: Swiftgram: upstream's makeVideoEncoderFactory body, unchanged.
++static std::unique_ptr<webrtc::VideoEncoderFactory> sgMakeUpstreamVideoEncoderFactory(bool preferHardwareEncoding, bool isScreencast) {
+     auto nativeFactory = std::make_unique<webrtc::CustomObjCVideoEncoderFactory>([[TGRTCDefaultVideoEncoderFactory alloc] initWithPreferHardwareH264:preferHardwareEncoding preferX264:false]);
+     if (!preferHardwareEncoding) {
+         auto nativeHardwareFactory = std::make_unique<webrtc::CustomObjCVideoEncoderFactory>([[TGRTCDefaultVideoEncoderFactory alloc] initWithPreferHardwareH264:!isScreencast preferX264:false]);
+@@ -118,6 +291,21 @@
+ }
+ 
+ void DarwinInterface::adaptVideoSource(webrtc::scoped_refptr<webrtc::VideoTrackSourceInterface> videoSource, int width, int height, int fps) {
++    // MARK: Swiftgram
++    // VideoCaptureInterfaceImpl re-requests 720x1280 @ 25 on every rotation;
++    // keep the request inside SGCallVideoLimits so that does not undo them.
++    SGCallVideoLimits *limits = [SGCallVideoLimits shared];
++    const int32_t maxShortSide = limits.maxShortSide;
++    const int32_t maxFps = limits.maxFps;
++    const int shortSide = MIN(width, height);
++    if (maxShortSide > 0 && shortSide > maxShortSide) {
++        const double scale = (double)maxShortSide / (double)shortSide;
++        width = ((int)(width * scale)) & ~1;
++        height = ((int)(height * scale)) & ~1;
++    }
++    if (maxFps > 0 && fps > maxFps) {
++        fps = maxFps;
++    }
+     getObjCVideoSource(videoSource)->OnOutputFormatRequest(width, height, fps);
+ }
+ 
+diff --git a/tgcalls/platform/darwin/VideoCameraCapturer.mm b/tgcalls/platform/darwin/VideoCameraCapturer.mm
+index 48dcd6a..a20cfe0 100644
+--- a/tgcalls/platform/darwin/VideoCameraCapturer.mm
++++ b/tgcalls/platform/darwin/VideoCameraCapturer.mm
+@@ -3,6 +3,7 @@
+ #import <AVFoundation/AVFoundation.h>
+ // MARK: Swiftgram
+ #import <TgVoipWebrtc/SGCallSubtitleRenderer.h>
++#import <TgVoipWebrtc/SGCallVideoLimits.h>
+ 
+ #include "rtc_base/logging.h"
+ #import "base/RTCLogging.h"
+@@ -121,6 +122,16 @@ @interface VideoCameraCapturer () <AVCaptureVideoDataOutputSampleBufferDelegate>
+ 
+     NSMutableArray<VideoCameraCapturerPreviewRecord *> *_previews;
+     std::vector<std::weak_ptr<rtc::VideoSinkInterface<webrtc::VideoFrame>>> _directSinks;
++
++    // MARK: Swiftgram
++    // What upstream asked for, kept so that when the limits are relaxed
++    // mid-call the camera goes back to exactly that. Live on
++    // RTCDispatcherTypeCaptureSession.
++    AVCaptureDeviceFormat *_sgRequestedFormat;
++    NSInteger _sgRequestedFps;
++    // SGCallVideoLimits.generation that the current camera configuration
++    // reflects. Written on frameQueue and RTCDispatcherTypeCaptureSession.
++    std::atomic<int64_t> _sgAppliedGeneration;
+ }
+ 
+ @end
+@@ -335,7 +346,18 @@ - (void)startCaptureWithDevice:(AVCaptureDevice *)device
+       });
+       
+       _currentDevice = device;
+-      
++
++      // MARK: Swiftgram
++      // Swap in a smaller format and lower frame rate when the call video is
++      // limited. A smaller sensor format is cheaper at every later stage: the
++      // ISP, the CPU colour conversion, the encoder and the radio.
++      _sgRequestedFormat = format;
++      _sgRequestedFps = fps;
++      _sgAppliedGeneration = [SGCallVideoLimits shared].generation;
++      AVCaptureDeviceFormat *sgFormat = format;
++      NSInteger sgFps = fps;
++      [self sgApplyLimitsToFormat:&sgFormat fps:&sgFps device:device];
++
+       NSError *error = nil;
+       if (![_currentDevice lockForConfiguration:&error]) {
+           RTCLogError(@"Failed to lock device %@. Error: %@",
+@@ -348,8 +370,9 @@ - (void)startCaptureWithDevice:(AVCaptureDevice *)device
+           return;
+       }
+       [self reconfigureCaptureSessionInput];
+-      [self updateDeviceCaptureFormat:format fps:fps];
+-      [self updateVideoDataOutputPixelFormat:format];
++      // MARK: Swiftgram
++      [self updateDeviceCaptureFormat:sgFormat fps:sgFps];
++      [self updateVideoDataOutputPixelFormat:sgFormat];
+       [_captureSession startRunning];
+       [_currentDevice unlockForConfiguration];
+       _isRunning = YES;
+@@ -403,7 +426,24 @@ - (void)deviceOrientationDidChange:(NSNotification *)notification {
+ 
+     CVPixelBufferLockBaseAddress(pixelBuffer, kCVPixelBufferLock_ReadOnly);
+ 
+-    auto resultBuffer = rtc::make_ref_counted<webrtc::I420Buffer>((int)CVPixelBufferGetWidth(pixelBuffer), (int)CVPixelBufferGetHeight(pixelBuffer));
++    // MARK: Swiftgram
++    // Fold the call-video resolution limit into the conversion that happens
++    // anyway: NV12ToI420Scale converts and downscales in one pass. This covers
++    // limits with no matching native camera format (e.g. 640x360 taken from a
++    // 960x540 format).
++    const int sgSourceWidth = (int)CVPixelBufferGetWidth(pixelBuffer);
++    const int sgSourceHeight = (int)CVPixelBufferGetHeight(pixelBuffer);
++    int sgResultWidth = sgSourceWidth;
++    int sgResultHeight = sgSourceHeight;
++    const int32_t sgMaxShortSide = [SGCallVideoLimits shared].maxShortSide;
++    const int sgSourceShortSide = MIN(sgSourceWidth, sgSourceHeight);
++    if (sgMaxShortSide > 0 && sgSourceShortSide > sgMaxShortSide) {
++        const double scale = (double)sgMaxShortSide / (double)sgSourceShortSide;
++        sgResultWidth = MAX(2, ((int)(sgSourceWidth * scale)) & ~1);
++        sgResultHeight = MAX(2, ((int)(sgSourceHeight * scale)) & ~1);
++    }
++
++    auto resultBuffer = rtc::make_ref_counted<webrtc::I420Buffer>(sgResultWidth, sgResultHeight);
+ 
+     switch (pixelFormat) {
+         case kCVPixelFormatType_420YpCbCr8BiPlanarFullRange:
+@@ -416,12 +456,14 @@ - (void)deviceOrientationDidChange:(NSNotification *)notification {
+             const int srcUVStride = (int)CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 1);
+ 
+             // TODO(magjed): Use a frame buffer pool.
++            // MARK: Swiftgram: source size is the pixel buffer's, not the
++            // (possibly smaller) destination's.
+             _nv12ToI420Scaler.NV12ToI420Scale(srcY,
+                                              srcYStride,
+                                              srcUV,
+                                              srcUVStride,
+-                                             resultBuffer->width(),
+-                                             resultBuffer->height(),
++                                             sgSourceWidth,
++                                             sgSourceHeight,
+                                              resultBuffer->MutableDataY(),
+                                              resultBuffer->StrideY(),
+                                              resultBuffer->MutableDataU(),
+@@ -503,6 +545,15 @@ - (void)captureOutput:(AVCaptureOutput *)captureOutput
+     if (_warmupFrameCount < minWarmupFrameCount) {
+         return;
+     }
++
++    // MARK: Swiftgram
++    // Limits changed mid-call (settings, or the thermal governor): reconfigure
++    // the camera. One atomic compare per frame when nothing changed.
++    const int64_t sgGeneration = [SGCallVideoLimits shared].generation;
++    if (sgGeneration != _sgAppliedGeneration.load()) {
++        _sgAppliedGeneration = sgGeneration;
++        [self sgReapplyLimits];
++    }
+     
+     if (CMSampleBufferGetNumSamples(sampleBuffer) != 1 || !CMSampleBufferIsValid(sampleBuffer) ||
+         !CMSampleBufferDataIsReady(sampleBuffer)) {
+@@ -660,7 +711,13 @@ - (void)captureOutput:(AVCaptureOutput *)captureOutput
+         });
+     }
+ 
+-    auto i420Buffer = [self prepareI420Buffer:[rtcPixelBuffer pixelBuffer]];
++    // MARK: Swiftgram
++    // Upstream converted every frame even while the outgoing video is paused
++    // and the result is thrown away. Nothing below uses the buffer when paused.
++    webrtc::scoped_refptr<webrtc::VideoFrameBuffer> i420Buffer;
++    if (!_isPaused) {
++        i420Buffer = [self prepareI420Buffer:[rtcPixelBuffer pixelBuffer]];
++    }
+     
+     // MARK: Swiftgram
+     // Burn live-translation subtitles into the outgoing frame.
+@@ -927,12 +984,137 @@ - (void)updateDeviceCaptureFormat:(AVCaptureDeviceFormat *)format fps:(NSInteger
+     @try {
+         _currentDevice.activeFormat = format;
+         _currentDevice.activeVideoMinFrameDuration = CMTimeMake(1, (int32_t)fps);
++        // MARK: Swiftgram
++        // Upstream only floors the frame duration. When the call video is
++        // limited, also lock the ceiling so the camera really runs at `fps`
++        // instead of whatever it prefers. kCMTimeInvalid restores the default.
++        if ([SGCallVideoLimits shared].maxFps > 0) {
++            _currentDevice.activeVideoMaxFrameDuration = CMTimeMake(1, (int32_t)fps);
++        } else {
++            _currentDevice.activeVideoMaxFrameDuration = kCMTimeInvalid;
++        }
+     } @catch (NSException *exception) {
+         RTCLogError(@"Failed to set active format!\n User info:%@", exception.userInfo);
+         return;
+     }
+ }
+ 
++// MARK: Swiftgram
++/// Replace `format` and `fps` with the smallest format and frame rate that
++/// satisfy SGCallVideoLimits. Leaves them alone when nothing is limited.
++- (void)sgApplyLimitsToFormat:(AVCaptureDeviceFormat * __strong *)format fps:(NSInteger *)fps device:(AVCaptureDevice *)device {
++    SGCallVideoLimits *limits = [SGCallVideoLimits shared];
++    const int32_t maxShortSide = limits.maxShortSide;
++    const int32_t maxFps = limits.maxFps;
++
++    NSInteger targetFps = *fps;
++    if (maxFps > 0 && targetFps > maxFps) {
++        targetFps = maxFps;
++    }
++
++    AVCaptureDeviceFormat *requested = *format;
++    AVCaptureDeviceFormat *selected = requested;
++    if (maxShortSide > 0 && requested != nil) {
++        const CMVideoDimensions requestedDimensions = CMVideoFormatDescriptionGetDimensions(requested.formatDescription);
++        const int requestedShortSide = MIN(requestedDimensions.width, requestedDimensions.height);
++        const int requestedLongSide = MAX(requestedDimensions.width, requestedDimensions.height);
++        const FourCharCode requestedSubtype = CMFormatDescriptionGetMediaSubType(requested.formatDescription);
++        const double requestedAspect = requestedShortSide > 0 ? (double)requestedLongSide / (double)requestedShortSide : 0.0;
++
++        if (requestedShortSide > maxShortSide) {
++            AVCaptureDeviceFormat *bestMatchingAspect = nil;
++            int bestMatchingAspectShortSide = INT_MAX;
++            AVCaptureDeviceFormat *bestAnyAspect = nil;
++            int bestAnyAspectShortSide = INT_MAX;
++
++            for (AVCaptureDeviceFormat *candidate in device.formats) {
++                if (CMFormatDescriptionGetMediaSubType(candidate.formatDescription) != requestedSubtype) {
++                    continue;
++                }
++                const CMVideoDimensions dimensions = CMVideoFormatDescriptionGetDimensions(candidate.formatDescription);
++                const int shortSide = MIN(dimensions.width, dimensions.height);
++                const int longSide = MAX(dimensions.width, dimensions.height);
++                // Only ever go smaller than upstream's choice, and never below
++                // the limit: the rest is done by the I420 downscale.
++                if (shortSide < maxShortSide || shortSide >= requestedShortSide) {
++                    continue;
++                }
++                bool supportsFps = false;
++                for (AVFrameRateRange *range in candidate.videoSupportedFrameRateRanges) {
++                    if (range.maxFrameRate + 0.5 >= (double)targetFps && range.minFrameRate - 0.5 <= (double)targetFps) {
++                        supportsFps = true;
++                        break;
++                    }
++                }
++                if (!supportsFps) {
++                    continue;
++                }
++                const double aspect = (double)longSide / (double)shortSide;
++                if (fabs(aspect - requestedAspect) < 0.02) {
++                    if (shortSide < bestMatchingAspectShortSide) {
++                        bestMatchingAspect = candidate;
++                        bestMatchingAspectShortSide = shortSide;
++                    }
++                } else if (shortSide < bestAnyAspectShortSide) {
++                    bestAnyAspect = candidate;
++                    bestAnyAspectShortSide = shortSide;
++                }
++            }
++            if (bestMatchingAspect != nil) {
++                selected = bestMatchingAspect;
++            } else if (bestAnyAspect != nil) {
++                selected = bestAnyAspect;
++            }
++        }
++    }
++
++    // Keep the frame rate inside what the chosen format supports.
++    if (selected != nil) {
++        double lowest = DBL_MAX;
++        double highest = 0.0;
++        for (AVFrameRateRange *range in selected.videoSupportedFrameRateRanges) {
++            lowest = MIN(lowest, range.minFrameRate);
++            highest = MAX(highest, range.maxFrameRate);
++        }
++        if (highest > 0.0) {
++            targetFps = MAX((NSInteger)ceil(lowest), MIN(targetFps, (NSInteger)floor(highest)));
++        }
++    }
++
++    if (selected != requested || targetFps != *fps) {
++        const CMVideoDimensions dimensions = CMVideoFormatDescriptionGetDimensions(selected.formatDescription);
++        NSLog(@"[SGCallVideoLimits] capture %dx%d @ %ld fps (limits: shortSide=%d fps=%d)", dimensions.width, dimensions.height, (long)targetFps, maxShortSide, maxFps);
++    }
++
++    *format = selected;
++    *fps = targetFps;
++}
++
++// MARK: Swiftgram
++/// Re-run format and frame-rate selection on the running camera after
++/// SGCallVideoLimits changed.
++- (void)sgReapplyLimits {
++    [RTCDispatcher dispatchAsyncOnType:RTCDispatcherTypeCaptureSession block:^{
++        if (!_isRunning || _currentDevice == nil || _sgRequestedFormat == nil) {
++            return;
++        }
++        AVCaptureDeviceFormat *format = _sgRequestedFormat;
++        NSInteger fps = _sgRequestedFps;
++        [self sgApplyLimitsToFormat:&format fps:&fps device:_currentDevice];
++
++        NSError *error = nil;
++        if (![_currentDevice lockForConfiguration:&error]) {
++            RTCLogError(@"[SGCallVideoLimits] failed to lock device: %@", error.userInfo);
++            return;
++        }
++        [_captureSession beginConfiguration];
++        [self updateDeviceCaptureFormat:format fps:fps];
++        [self updateVideoDataOutputPixelFormat:format];
++        [_captureSession commitConfiguration];
++        [_currentDevice unlockForConfiguration];
++    }];
++}
++
+ - (void)reconfigureCaptureSessionInput {
+     NSAssert([RTCDispatcher isOnQueueForType:RTCDispatcherTypeCaptureSession],
+              @"reconfigureCaptureSessionInput must be called on the capture queue.");

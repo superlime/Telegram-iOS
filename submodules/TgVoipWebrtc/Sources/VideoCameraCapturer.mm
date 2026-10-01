@@ -12,15 +12,22 @@
 //
 // Forked from tgcalls e3069322a3d1e16ecb11a5e302242e59ddd7f09e
 //
-// The ONLY divergence from upstream is the subtitle blend marked "MARK:
-// Swiftgram" below. When tgcalls updates this file, re-copy it and re-apply
-// that block; Swiftgram/patches/tgcalls-subtitle-burn-in.patch holds the diff.
+// The divergences from upstream are all marked "MARK: Swiftgram":
+//  - the live-translation subtitle blend;
+//  - the cooler-video-call limits (SGCallVideoLimits): a smaller capture format,
+//    a locked lower frame rate, a downscale folded into the NV12->I420
+//    conversion, no conversion while paused, and live reconfiguration when the
+//    limits change mid-call.
+// When tgcalls updates this file, re-copy it and re-apply those blocks;
+// Swiftgram/patches/tgcalls-subtitle-burn-in.patch and
+// Swiftgram/patches/tgcalls-call-video-limits.patch hold the diffs.
 
 #include "VideoCameraCapturer.h"
 
 #import <AVFoundation/AVFoundation.h>
 // MARK: Swiftgram
 #import <TgVoipWebrtc/SGCallSubtitleRenderer.h>
+#import <TgVoipWebrtc/SGCallVideoLimits.h>
 
 #include "rtc_base/logging.h"
 #import "base/RTCLogging.h"
@@ -139,6 +146,16 @@ static UIDeviceOrientation deviceOrientation(UIInterfaceOrientation orientation)
 
     NSMutableArray<VideoCameraCapturerPreviewRecord *> *_previews;
     std::vector<std::weak_ptr<rtc::VideoSinkInterface<webrtc::VideoFrame>>> _directSinks;
+
+    // MARK: Swiftgram
+    // What upstream asked for, kept so that when the limits are relaxed
+    // mid-call the camera goes back to exactly that. Live on
+    // RTCDispatcherTypeCaptureSession.
+    AVCaptureDeviceFormat *_sgRequestedFormat;
+    NSInteger _sgRequestedFps;
+    // SGCallVideoLimits.generation that the current camera configuration
+    // reflects. Written on frameQueue and RTCDispatcherTypeCaptureSession.
+    std::atomic<int64_t> _sgAppliedGeneration;
 }
 
 @end
@@ -353,7 +370,18 @@ static UIDeviceOrientation deviceOrientation(UIInterfaceOrientation orientation)
       });
       
       _currentDevice = device;
-      
+
+      // MARK: Swiftgram
+      // Swap in a smaller format and lower frame rate when the call video is
+      // limited. A smaller sensor format is cheaper at every later stage: the
+      // ISP, the CPU colour conversion, the encoder and the radio.
+      _sgRequestedFormat = format;
+      _sgRequestedFps = fps;
+      _sgAppliedGeneration = [SGCallVideoLimits shared].generation;
+      AVCaptureDeviceFormat *sgFormat = format;
+      NSInteger sgFps = fps;
+      [self sgApplyLimitsToFormat:&sgFormat fps:&sgFps device:device];
+
       NSError *error = nil;
       if (![_currentDevice lockForConfiguration:&error]) {
           RTCLogError(@"Failed to lock device %@. Error: %@",
@@ -366,8 +394,9 @@ static UIDeviceOrientation deviceOrientation(UIInterfaceOrientation orientation)
           return;
       }
       [self reconfigureCaptureSessionInput];
-      [self updateDeviceCaptureFormat:format fps:fps];
-      [self updateVideoDataOutputPixelFormat:format];
+      // MARK: Swiftgram
+      [self updateDeviceCaptureFormat:sgFormat fps:sgFps];
+      [self updateVideoDataOutputPixelFormat:sgFormat];
       [_captureSession startRunning];
       [_currentDevice unlockForConfiguration];
       _isRunning = YES;
@@ -421,7 +450,24 @@ static UIDeviceOrientation deviceOrientation(UIInterfaceOrientation orientation)
 
     CVPixelBufferLockBaseAddress(pixelBuffer, kCVPixelBufferLock_ReadOnly);
 
-    auto resultBuffer = rtc::make_ref_counted<webrtc::I420Buffer>((int)CVPixelBufferGetWidth(pixelBuffer), (int)CVPixelBufferGetHeight(pixelBuffer));
+    // MARK: Swiftgram
+    // Fold the call-video resolution limit into the conversion that happens
+    // anyway: NV12ToI420Scale converts and downscales in one pass. This covers
+    // limits with no matching native camera format (e.g. 640x360 taken from a
+    // 960x540 format).
+    const int sgSourceWidth = (int)CVPixelBufferGetWidth(pixelBuffer);
+    const int sgSourceHeight = (int)CVPixelBufferGetHeight(pixelBuffer);
+    int sgResultWidth = sgSourceWidth;
+    int sgResultHeight = sgSourceHeight;
+    const int32_t sgMaxShortSide = [SGCallVideoLimits shared].maxShortSide;
+    const int sgSourceShortSide = MIN(sgSourceWidth, sgSourceHeight);
+    if (sgMaxShortSide > 0 && sgSourceShortSide > sgMaxShortSide) {
+        const double scale = (double)sgMaxShortSide / (double)sgSourceShortSide;
+        sgResultWidth = MAX(2, ((int)(sgSourceWidth * scale)) & ~1);
+        sgResultHeight = MAX(2, ((int)(sgSourceHeight * scale)) & ~1);
+    }
+
+    auto resultBuffer = rtc::make_ref_counted<webrtc::I420Buffer>(sgResultWidth, sgResultHeight);
 
     switch (pixelFormat) {
         case kCVPixelFormatType_420YpCbCr8BiPlanarFullRange:
@@ -434,12 +480,14 @@ static UIDeviceOrientation deviceOrientation(UIInterfaceOrientation orientation)
             const int srcUVStride = (int)CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 1);
 
             // TODO(magjed): Use a frame buffer pool.
+            // MARK: Swiftgram: source size is the pixel buffer's, not the
+            // (possibly smaller) destination's.
             _nv12ToI420Scaler.NV12ToI420Scale(srcY,
                                              srcYStride,
                                              srcUV,
                                              srcUVStride,
-                                             resultBuffer->width(),
-                                             resultBuffer->height(),
+                                             sgSourceWidth,
+                                             sgSourceHeight,
                                              resultBuffer->MutableDataY(),
                                              resultBuffer->StrideY(),
                                              resultBuffer->MutableDataU(),
@@ -520,6 +568,15 @@ static UIDeviceOrientation deviceOrientation(UIInterfaceOrientation orientation)
     _warmupFrameCount++;
     if (_warmupFrameCount < minWarmupFrameCount) {
         return;
+    }
+
+    // MARK: Swiftgram
+    // Limits changed mid-call (settings, or the thermal governor): reconfigure
+    // the camera. One atomic compare per frame when nothing changed.
+    const int64_t sgGeneration = [SGCallVideoLimits shared].generation;
+    if (sgGeneration != _sgAppliedGeneration.load()) {
+        _sgAppliedGeneration = sgGeneration;
+        [self sgReapplyLimits];
     }
     
     if (CMSampleBufferGetNumSamples(sampleBuffer) != 1 || !CMSampleBufferIsValid(sampleBuffer) ||
@@ -678,7 +735,13 @@ static UIDeviceOrientation deviceOrientation(UIInterfaceOrientation orientation)
         });
     }
 
-    auto i420Buffer = [self prepareI420Buffer:[rtcPixelBuffer pixelBuffer]];
+    // MARK: Swiftgram
+    // Upstream converted every frame even while the outgoing video is paused
+    // and the result is thrown away. Nothing below uses the buffer when paused.
+    webrtc::scoped_refptr<webrtc::VideoFrameBuffer> i420Buffer;
+    if (!_isPaused) {
+        i420Buffer = [self prepareI420Buffer:[rtcPixelBuffer pixelBuffer]];
+    }
     
     // MARK: Swiftgram
     // Burn live-translation subtitles into the outgoing frame.
@@ -945,10 +1008,135 @@ static UIDeviceOrientation deviceOrientation(UIInterfaceOrientation orientation)
     @try {
         _currentDevice.activeFormat = format;
         _currentDevice.activeVideoMinFrameDuration = CMTimeMake(1, (int32_t)fps);
+        // MARK: Swiftgram
+        // Upstream only floors the frame duration. When the call video is
+        // limited, also lock the ceiling so the camera really runs at `fps`
+        // instead of whatever it prefers. kCMTimeInvalid restores the default.
+        if ([SGCallVideoLimits shared].maxFps > 0) {
+            _currentDevice.activeVideoMaxFrameDuration = CMTimeMake(1, (int32_t)fps);
+        } else {
+            _currentDevice.activeVideoMaxFrameDuration = kCMTimeInvalid;
+        }
     } @catch (NSException *exception) {
         RTCLogError(@"Failed to set active format!\n User info:%@", exception.userInfo);
         return;
     }
+}
+
+// MARK: Swiftgram
+/// Replace `format` and `fps` with the smallest format and frame rate that
+/// satisfy SGCallVideoLimits. Leaves them alone when nothing is limited.
+- (void)sgApplyLimitsToFormat:(AVCaptureDeviceFormat * __strong *)format fps:(NSInteger *)fps device:(AVCaptureDevice *)device {
+    SGCallVideoLimits *limits = [SGCallVideoLimits shared];
+    const int32_t maxShortSide = limits.maxShortSide;
+    const int32_t maxFps = limits.maxFps;
+
+    NSInteger targetFps = *fps;
+    if (maxFps > 0 && targetFps > maxFps) {
+        targetFps = maxFps;
+    }
+
+    AVCaptureDeviceFormat *requested = *format;
+    AVCaptureDeviceFormat *selected = requested;
+    if (maxShortSide > 0 && requested != nil) {
+        const CMVideoDimensions requestedDimensions = CMVideoFormatDescriptionGetDimensions(requested.formatDescription);
+        const int requestedShortSide = MIN(requestedDimensions.width, requestedDimensions.height);
+        const int requestedLongSide = MAX(requestedDimensions.width, requestedDimensions.height);
+        const FourCharCode requestedSubtype = CMFormatDescriptionGetMediaSubType(requested.formatDescription);
+        const double requestedAspect = requestedShortSide > 0 ? (double)requestedLongSide / (double)requestedShortSide : 0.0;
+
+        if (requestedShortSide > maxShortSide) {
+            AVCaptureDeviceFormat *bestMatchingAspect = nil;
+            int bestMatchingAspectShortSide = INT_MAX;
+            AVCaptureDeviceFormat *bestAnyAspect = nil;
+            int bestAnyAspectShortSide = INT_MAX;
+
+            for (AVCaptureDeviceFormat *candidate in device.formats) {
+                if (CMFormatDescriptionGetMediaSubType(candidate.formatDescription) != requestedSubtype) {
+                    continue;
+                }
+                const CMVideoDimensions dimensions = CMVideoFormatDescriptionGetDimensions(candidate.formatDescription);
+                const int shortSide = MIN(dimensions.width, dimensions.height);
+                const int longSide = MAX(dimensions.width, dimensions.height);
+                // Only ever go smaller than upstream's choice, and never below
+                // the limit: the rest is done by the I420 downscale.
+                if (shortSide < maxShortSide || shortSide >= requestedShortSide) {
+                    continue;
+                }
+                bool supportsFps = false;
+                for (AVFrameRateRange *range in candidate.videoSupportedFrameRateRanges) {
+                    if (range.maxFrameRate + 0.5 >= (double)targetFps && range.minFrameRate - 0.5 <= (double)targetFps) {
+                        supportsFps = true;
+                        break;
+                    }
+                }
+                if (!supportsFps) {
+                    continue;
+                }
+                const double aspect = (double)longSide / (double)shortSide;
+                if (fabs(aspect - requestedAspect) < 0.02) {
+                    if (shortSide < bestMatchingAspectShortSide) {
+                        bestMatchingAspect = candidate;
+                        bestMatchingAspectShortSide = shortSide;
+                    }
+                } else if (shortSide < bestAnyAspectShortSide) {
+                    bestAnyAspect = candidate;
+                    bestAnyAspectShortSide = shortSide;
+                }
+            }
+            if (bestMatchingAspect != nil) {
+                selected = bestMatchingAspect;
+            } else if (bestAnyAspect != nil) {
+                selected = bestAnyAspect;
+            }
+        }
+    }
+
+    // Keep the frame rate inside what the chosen format supports.
+    if (selected != nil) {
+        double lowest = DBL_MAX;
+        double highest = 0.0;
+        for (AVFrameRateRange *range in selected.videoSupportedFrameRateRanges) {
+            lowest = MIN(lowest, range.minFrameRate);
+            highest = MAX(highest, range.maxFrameRate);
+        }
+        if (highest > 0.0) {
+            targetFps = MAX((NSInteger)ceil(lowest), MIN(targetFps, (NSInteger)floor(highest)));
+        }
+    }
+
+    if (selected != requested || targetFps != *fps) {
+        const CMVideoDimensions dimensions = CMVideoFormatDescriptionGetDimensions(selected.formatDescription);
+        NSLog(@"[SGCallVideoLimits] capture %dx%d @ %ld fps (limits: shortSide=%d fps=%d)", dimensions.width, dimensions.height, (long)targetFps, maxShortSide, maxFps);
+    }
+
+    *format = selected;
+    *fps = targetFps;
+}
+
+// MARK: Swiftgram
+/// Re-run format and frame-rate selection on the running camera after
+/// SGCallVideoLimits changed.
+- (void)sgReapplyLimits {
+    [RTCDispatcher dispatchAsyncOnType:RTCDispatcherTypeCaptureSession block:^{
+        if (!_isRunning || _currentDevice == nil || _sgRequestedFormat == nil) {
+            return;
+        }
+        AVCaptureDeviceFormat *format = _sgRequestedFormat;
+        NSInteger fps = _sgRequestedFps;
+        [self sgApplyLimitsToFormat:&format fps:&fps device:_currentDevice];
+
+        NSError *error = nil;
+        if (![_currentDevice lockForConfiguration:&error]) {
+            RTCLogError(@"[SGCallVideoLimits] failed to lock device: %@", error.userInfo);
+            return;
+        }
+        [_captureSession beginConfiguration];
+        [self updateDeviceCaptureFormat:format fps:fps];
+        [self updateVideoDataOutputPixelFormat:format];
+        [_captureSession commitConfiguration];
+        [_currentDevice unlockForConfiguration];
+    }];
 }
 
 - (void)reconfigureCaptureSessionInput {

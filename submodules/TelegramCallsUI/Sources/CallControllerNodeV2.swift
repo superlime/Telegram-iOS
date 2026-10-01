@@ -21,6 +21,8 @@ import LibYuvBinding
 // MARK: Swiftgram
 import SGSimpleSettings
 import SGCallTranslation
+import SGCallThermal
+import SGLogging
 
 final class CallControllerNodeV2: ViewControllerTracingNode, CallControllerNodeProtocol {
     private struct PanGestureState {
@@ -44,6 +46,14 @@ final class CallControllerNodeV2: ViewControllerTracingNode, CallControllerNodeP
     fileprivate var sgTranslationIsEnabled: Bool = false
     fileprivate var sgDidAutoStartTranslation: Bool = false
     fileprivate var sgActionSheet: ActionSheetController?
+    fileprivate var sgThermalDisposable: Disposable?
+    fileprivate var sgThermalReading: SGThermalReading?
+    fileprivate var sgAppObservers: [NSObjectProtocol] = []
+    /// Brightness before this screen dimmed it; non-nil while dimmed.
+    fileprivate var sgSavedBrightness: CGFloat?
+    /// Between animateIn and animateOut. Dimming only applies while the call
+    /// screen is actually showing, not while it is minimised.
+    fileprivate var sgIsOnScreen: Bool = false
     
     let isReady = Promise<Bool>()
     private var didInitializeIsReady: Bool = false
@@ -190,6 +200,10 @@ final class CallControllerNodeV2: ViewControllerTracingNode, CallControllerNodeP
         if let data = call.context.currentAppConfiguration.with({ $0 }).data, let value = data["ios_call_video_sharpening"] as? Double {
             enableVideoSharpening = value != 0.0
         }
+        // MARK: Swiftgram
+        if SGSimpleSettings.shared.callReduceVideoEffects {
+            enableVideoSharpening = false
+        }
         
         self.callScreenState = PrivateCallScreen.State(
             strings: presentationData.strings,
@@ -217,7 +231,8 @@ final class CallControllerNodeV2: ViewControllerTracingNode, CallControllerNodeP
             ) ? SGSimpleSettings.shared.isCallTranslationEnabled(
                 accountId: call.context.account.peerId.id._internalGetInt64Value(),
                 peerId: call.peerId.id._internalGetInt64Value()
-            ) : nil
+            ) : nil,
+            sgReduceVideoEffects: SGSimpleSettings.shared.callReduceVideoEffects
         )
         
         self.isMicrophoneMutedDisposable = (call.isMuted
@@ -289,6 +304,9 @@ final class CallControllerNodeV2: ViewControllerTracingNode, CallControllerNodeP
                 })
             }
         })
+
+        // MARK: Swiftgram
+        self.sgSetupThermal()
     }
     
     deinit {
@@ -302,6 +320,7 @@ final class CallControllerNodeV2: ViewControllerTracingNode, CallControllerNodeP
         // The subtitle renderer is a process-wide singleton, so failing to clear
         // it here would leak the last call's subtitles into the next one.
         self.sgTearDownTranslation()
+        self.sgTearDownThermal()
     }
     
     func updateAudioOutputs(availableOutputs: [AudioSessionOutput], currentOutput: AudioSessionOutput?) {
@@ -703,6 +722,9 @@ final class CallControllerNodeV2: ViewControllerTracingNode, CallControllerNodeP
     }
 
     func animateIn() {
+        // MARK: Swiftgram
+        self.sgIsOnScreen = true
+        self.sgUpdateDimming()
         self.panGestureState = nil
         self.update(transition: .immediate)
         
@@ -730,6 +752,9 @@ final class CallControllerNodeV2: ViewControllerTracingNode, CallControllerNodeP
     }
     
     func animateOut(completion: @escaping () -> Void) {
+        // MARK: Swiftgram
+        self.sgIsOnScreen = false
+        self.sgRestoreBrightness()
         self.statusBar.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.3, removeOnCompletion: false)
         if self.containerView.alpha > 0.0 {
             self.containerView.layer.allowsGroupOpacity = true
@@ -835,6 +860,8 @@ final class CallControllerNodeV2: ViewControllerTracingNode, CallControllerNodeP
                     callScreenState.translationSubtitles = []
                     callScreenState.translationEnabled = callScreenState.translationEnabled.flatMap { _ in false }
                 }
+                callScreenState.sgThermalBadge = nil
+                self.sgRestoreBrightness()
             }
             self.callScreen.update(
                 size: layout.size,
@@ -1377,5 +1404,151 @@ extension CallControllerNodeV2 {
     private func sgDismissActionSheet() {
         self.sgActionSheet?.dismissAnimated()
         self.sgActionSheet = nil
+    }
+}
+
+// MARK: Swiftgram - cooler video calls
+extension CallControllerNodeV2 {
+    /// Follow the call's thermal readings: the status pill, the throttle
+    /// indicator, and screen dimming. The limits themselves are owned by
+    /// PresentationCallImpl, so they keep working while this screen is closed.
+    fileprivate func sgSetupThermal() {
+        self.sgThermalDisposable = (SGCallThermalMonitor.shared.readings
+        |> deliverOnMainQueue).startStrict(next: { [weak self] reading in
+            self?.sgApplyThermalReading(reading)
+        })
+
+        let center = NotificationCenter.default
+        self.sgAppObservers = [
+            center.addObserver(forName: UIApplication.willResignActiveNotification, object: nil, queue: .main, using: { [weak self] _ in
+                self?.sgRestoreBrightness()
+            }),
+            center.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main, using: { [weak self] _ in
+                self?.sgUpdateDimming()
+            })
+        ]
+    }
+
+    fileprivate func sgTearDownThermal() {
+        self.sgThermalDisposable?.dispose()
+        self.sgThermalDisposable = nil
+        for observer in self.sgAppObservers {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        self.sgAppObservers = []
+        self.sgRestoreBrightness()
+    }
+
+    private func sgApplyThermalReading(_ reading: SGThermalReading?) {
+        self.sgThermalReading = reading
+
+        if var callScreenState = self.callScreenState {
+            if case .terminated = callScreenState.lifecycleState {
+            } else {
+                let badge = reading.flatMap(CallControllerNodeV2.sgMakeThermalBadge)
+                let reduceVideoEffects = SGSimpleSettings.shared.callReduceVideoEffects
+                if callScreenState.sgThermalBadge != badge || callScreenState.sgReduceVideoEffects != reduceVideoEffects {
+                    callScreenState.sgThermalBadge = badge
+                    callScreenState.sgReduceVideoEffects = reduceVideoEffects
+                    self.callScreenState = callScreenState
+                    self.update(transition: .animated(duration: 0.3, curve: .easeInOut))
+                }
+            }
+        }
+
+        self.sgUpdateDimming()
+    }
+
+    private static func sgMakeThermalBadge(_ reading: SGThermalReading) -> PrivateCallScreen.State.ThermalBadge? {
+        let level: PrivateCallScreen.State.ThermalBadge.Level
+        let levelTitle: String
+        switch reading.level {
+        case .nominal:
+            level = .nominal
+            levelTitle = "Nominal"
+        case .fair:
+            level = .fair
+            levelTitle = "Fair"
+        case .serious:
+            level = .serious
+            levelTitle = "Serious"
+        case .critical:
+            level = .critical
+            levelTitle = "Critical"
+        }
+
+        var statusText: String?
+        if SGSimpleSettings.shared.callShowThermalStatus {
+            var parts: [String] = [levelTitle]
+            if let celsius = reading.celsius {
+                parts.append(String(format: "%.1f°C", celsius))
+            }
+            if let batteryLevel = reading.batteryLevel {
+                parts.append("\(Int((batteryLevel * 100.0).rounded()))%" + (reading.isCharging ? " ⚡" : ""))
+            } else if reading.isCharging {
+                parts.append("⚡")
+            }
+            statusText = parts.joined(separator: " · ")
+        }
+
+        // Shown even with the status line off: it explains why the video
+        // quality just dropped.
+        let throttleText = reading.throttle.flatMap { "❄ Throttled " + $0.limits.shortText() }
+
+        if statusText == nil && throttleText == nil {
+            return nil
+        }
+        return PrivateCallScreen.State.ThermalBadge(level: level, statusText: statusText, throttleText: throttleText)
+    }
+
+    /// Whether the screen should be dimmed right now.
+    private func sgShouldDim() -> Bool {
+        guard self.sgIsOnScreen, UIApplication.shared.applicationState == .active, let callScreenState = self.callScreenState else {
+            return false
+        }
+        if case .terminated = callScreenState.lifecycleState {
+            return false
+        }
+        // Dimming is for video calls; an audio call's screen is usually off
+        // against the ear anyway.
+        if callScreenState.localVideo == nil && callScreenState.remoteVideo == nil {
+            return false
+        }
+        switch SGSimpleSettings.shared.callDimScreenEnum {
+        case .off:
+            return false
+        case .always:
+            return true
+        case .whenHot:
+            guard let reading = self.sgThermalReading else {
+                return false
+            }
+            return reading.level >= .serious
+        }
+    }
+
+    fileprivate func sgUpdateDimming() {
+        if self.sgShouldDim() {
+            if self.sgSavedBrightness == nil {
+                let current = UIScreen.main.brightness
+                self.sgSavedBrightness = current
+                let dimmed = max(0.15, current * 0.5)
+                if dimmed < current {
+                    UIScreen.main.brightness = dimmed
+                }
+                SGLogger.shared.log("SGThermal", String(format: "screen dimmed %.2f -> %.2f", current, min(dimmed, current)))
+            }
+        } else {
+            self.sgRestoreBrightness()
+        }
+    }
+
+    fileprivate func sgRestoreBrightness() {
+        guard let saved = self.sgSavedBrightness else {
+            return
+        }
+        self.sgSavedBrightness = nil
+        UIScreen.main.brightness = saved
+        SGLogger.shared.log("SGThermal", String(format: "screen brightness restored to %.2f", saved))
     }
 }

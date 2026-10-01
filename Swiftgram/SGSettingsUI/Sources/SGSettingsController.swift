@@ -42,6 +42,7 @@ private enum SGControllerSection: Int32, SGItemListSection {
     case translation
     case voiceMessages
     case calls
+    case callVideo
     case photo
     case stickers
     case videoNotes
@@ -112,6 +113,9 @@ private enum SGBoolSetting: String {
     case nyStyleSnow
     case nyStyleLightning
     case tabBarSearchEnabled
+    case callThermalAutoThrottle
+    case callReduceVideoEffects
+    case callShowThermalStatus
 }
 
 private enum SGOneFromManySetting: String {
@@ -122,6 +126,10 @@ private enum SGOneFromManySetting: String {
 //    case allChatsFolderPositionOverride
     case translationBackend
     case transcriptionBackend
+    case callVideoResolution
+    case callVideoFrameRate
+    case callVideoMaxBitrate
+    case callDimScreen
 }
 
 private enum SGSliderSetting: String {
@@ -250,6 +258,17 @@ private func SGControllerEntries(presentationData: PresentationData, callListSet
     entries.append(.header(id: id.count, section: .calls, text: strings.Calls_TabTitle.uppercased(), badge: nil))
     entries.append(.toggle(id: id.count, section: .calls, settingName: .enableVoipTcp, value: experimentalUISettings.enableVoipTcp, text: "Force TCP", enabled: true))
     entries.append(.notice(id: id.count, section: .calls, text: "Common.KnowWhatYouDo".i18n(lang)))
+
+    // MARK: Swiftgram - cooler video calls
+    entries.append(.header(id: id.count, section: .callVideo, text: i18n("Settings.CallVideo.Header", lang), badge: nil))
+    entries.append(.oneFromManySelector(id: id.count, section: .callVideo, settingName: .callVideoResolution, text: i18n("Settings.CallVideo.Resolution", lang), value: i18n("Settings.CallVideo.Resolution.\(SGSimpleSettings.shared.callVideoResolutionEnum.rawValue)", lang), enabled: true))
+    entries.append(.oneFromManySelector(id: id.count, section: .callVideo, settingName: .callVideoFrameRate, text: i18n("Settings.CallVideo.FrameRate", lang), value: i18n("Settings.CallVideo.FrameRate.\(SGSimpleSettings.shared.callVideoFrameRateEnum.rawValue)", lang), enabled: true))
+    entries.append(.oneFromManySelector(id: id.count, section: .callVideo, settingName: .callVideoMaxBitrate, text: i18n("Settings.CallVideo.MaxBitrate", lang), value: i18n("Settings.CallVideo.MaxBitrate.\(SGSimpleSettings.shared.callVideoMaxBitrateEnum.rawValue)", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .callVideo, settingName: .callThermalAutoThrottle, value: SGSimpleSettings.shared.callThermalAutoThrottle, text: i18n("Settings.CallVideo.AutoThrottle", lang), enabled: true))
+    entries.append(.oneFromManySelector(id: id.count, section: .callVideo, settingName: .callDimScreen, text: i18n("Settings.CallVideo.DimScreen", lang), value: i18n("Settings.CallVideo.DimScreen.\(SGSimpleSettings.shared.callDimScreenEnum.rawValue)", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .callVideo, settingName: .callReduceVideoEffects, value: SGSimpleSettings.shared.callReduceVideoEffects, text: i18n("Settings.CallVideo.ReduceEffects", lang), enabled: true))
+    entries.append(.toggle(id: id.count, section: .callVideo, settingName: .callShowThermalStatus, value: SGSimpleSettings.shared.callShowThermalStatus, text: i18n("Settings.CallVideo.ShowThermalStatus", lang), enabled: true))
+    entries.append(.notice(id: id.count, section: .callVideo, text: i18n("Settings.CallVideo.Notice", lang)))
     
     entries.append(.header(id: id.count, section: .photo, text: strings.NetworkUsageSettings_MediaImageDataSection, badge: nil))
     entries.append(.header(id: id.count, section: .photo, text: strings.PhotoEditor_QualityTool.uppercased(), badge: nil))
@@ -531,6 +550,12 @@ public func sgSettingsController(context: AccountContext/*, focusOnItemTag: Int?
         case .nyStyleLightning:
             SGSimpleSettings.shared.nyStyle = value ? SGSimpleSettings.NYStyle.lightning.rawValue : SGSimpleSettings.NYStyle.default.rawValue
             simplePromise.set(true) // Trigger update for 'enabled' field of other toggles
+        case .callThermalAutoThrottle:
+            SGSimpleSettings.shared.callThermalAutoThrottle = value
+        case .callReduceVideoEffects:
+            SGSimpleSettings.shared.callReduceVideoEffects = value
+        case .callShowThermalStatus:
+            SGSimpleSettings.shared.callShowThermalStatus = value
         }
     }, updateSliderValue: { setting, value in
         switch (setting) {
@@ -683,6 +708,38 @@ public func sgSettingsController(context: AccountContext/*, focusOnItemTag: Int?
                     items.append(ActionSheetButtonItem(title: i18n("Settings.Transcription.Backend.\(value.rawValue)", presentationData.strings.baseLanguageCode), color: .accent, action: { [weak actionSheet] in
                         actionSheet?.dismissAnimated()
                         setAction(value.rawValue)
+                    }))
+                }
+            case .callVideoResolution:
+                for value in SGSimpleSettings.CallVideoResolution.allCases {
+                    items.append(ActionSheetButtonItem(title: i18n("Settings.CallVideo.Resolution.\(value.rawValue)", presentationData.strings.baseLanguageCode), color: .accent, action: { [weak actionSheet] in
+                        actionSheet?.dismissAnimated()
+                        SGSimpleSettings.shared.callVideoResolution = value.rawValue
+                        simplePromise.set(true)
+                    }))
+                }
+            case .callVideoFrameRate:
+                for value in SGSimpleSettings.CallVideoFrameRate.allCases {
+                    items.append(ActionSheetButtonItem(title: i18n("Settings.CallVideo.FrameRate.\(value.rawValue)", presentationData.strings.baseLanguageCode), color: .accent, action: { [weak actionSheet] in
+                        actionSheet?.dismissAnimated()
+                        SGSimpleSettings.shared.callVideoFrameRate = value.rawValue
+                        simplePromise.set(true)
+                    }))
+                }
+            case .callVideoMaxBitrate:
+                for value in SGSimpleSettings.CallVideoMaxBitrate.allCases {
+                    items.append(ActionSheetButtonItem(title: i18n("Settings.CallVideo.MaxBitrate.\(value.rawValue)", presentationData.strings.baseLanguageCode), color: .accent, action: { [weak actionSheet] in
+                        actionSheet?.dismissAnimated()
+                        SGSimpleSettings.shared.callVideoMaxBitrate = value.rawValue
+                        simplePromise.set(true)
+                    }))
+                }
+            case .callDimScreen:
+                for value in SGSimpleSettings.CallDimScreen.allCases {
+                    items.append(ActionSheetButtonItem(title: i18n("Settings.CallVideo.DimScreen.\(value.rawValue)", presentationData.strings.baseLanguageCode), color: .accent, action: { [weak actionSheet] in
+                        actionSheet?.dismissAnimated()
+                        SGSimpleSettings.shared.callDimScreen = value.rawValue
+                        simplePromise.set(true)
                     }))
                 }
             case .nyStyle:

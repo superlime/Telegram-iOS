@@ -134,6 +134,18 @@ final class VideoContainerView: HighlightTrackingButton {
     var videoContainerLayerTaken: Bool = false
     
     private var videoLayer: PrivateCallVideoLayer
+
+    // MARK: Swiftgram
+    /// Hide the blurred copy of the video, which skips its per-frame downscale,
+    /// two-pass blur and full-screen render. Only set while the call controls
+    /// are hidden, because the frosted controls are what the blur is behind.
+    var sgBlurHidden: Bool = false {
+        didSet {
+            if self.sgBlurHidden != oldValue {
+                self.videoLayer.blurredLayer.isHidden = self.sgBlurHidden
+            }
+        }
+    }
     private var disappearingVideoLayer: DisappearingVideo?
     
     var currentVideoOutput: VideoSource.Output? {
@@ -465,6 +477,8 @@ final class VideoContainerView: HighlightTrackingButton {
         }
         self.videoLayer.cornerRadius = previousVideoLayer.cornerRadius
         self.videoLayer.blurredLayer.opacity = previousVideoLayer.blurredLayer.opacity
+        // MARK: Swiftgram
+        self.videoLayer.blurredLayer.isHidden = self.sgBlurHidden
         
         self.videoContainerLayer.contentsLayer.addSublayer(self.videoLayer)
         self.blurredContainerLayer.addSublayer(self.videoLayer.blurredLayer)

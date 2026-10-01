@@ -44,6 +44,8 @@ sgdeps = [
     "//Swiftgram/SGAppGroupIdentifier:SGAppGroupIdentifier",
     "//Swiftgram/SGSimpleSettings:SGSimpleSettings",
     "//Swiftgram/SGCallTranslation:SGCallTranslation",
+    "//Swiftgram/SGCallThermal:SGCallThermal",
+    "//Swiftgram/SGLogging:SGLogging",
 ]
 
 swift_library(

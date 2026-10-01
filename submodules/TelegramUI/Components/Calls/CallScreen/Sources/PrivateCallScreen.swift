@@ -90,6 +90,34 @@ public final class PrivateCallScreen: OverlayMaskContainerView, AVPictureInPictu
         /// Translations of the last few utterances, oldest first, burned into
         /// the outgoing video as subtitles.
         public var translationSubtitles: [String]
+
+        /// Thermal status pill in the top corner. Built by the call controller
+        /// from SGCallThermal; plain values so this module needs no Swiftgram
+        /// dependency.
+        public struct ThermalBadge: Equatable {
+            public enum Level: Equatable {
+                case nominal
+                case fair
+                case serious
+                case critical
+            }
+
+            public var level: Level
+            /// e.g. "Serious · 41.2°C · 72% ⚡". nil hides the status line.
+            public var statusText: String?
+            /// e.g. "❄ Throttled 480p · 15fps · 400k". nil when not throttled.
+            public var throttleText: String?
+
+            public init(level: Level, statusText: String?, throttleText: String?) {
+                self.level = level
+                self.statusText = statusText
+                self.throttleText = throttleText
+            }
+        }
+        /// nil hides the pill.
+        public var sgThermalBadge: ThermalBadge?
+        /// Skip the blurred video backdrop while the controls are hidden.
+        public var sgReduceVideoEffects: Bool
         
         public init(
             strings: PresentationStrings,
@@ -109,7 +137,9 @@ public final class PrivateCallScreen: OverlayMaskContainerView, AVPictureInPictu
             enableVideoSharpening: Bool,
             // MARK: Swiftgram
             translationEnabled: Bool? = nil,
-            translationSubtitles: [String] = []
+            translationSubtitles: [String] = [],
+            sgThermalBadge: ThermalBadge? = nil,
+            sgReduceVideoEffects: Bool = false
         ) {
             self.strings = strings
             self.lifecycleState = lifecycleState
@@ -129,6 +159,8 @@ public final class PrivateCallScreen: OverlayMaskContainerView, AVPictureInPictu
             // MARK: Swiftgram
             self.translationEnabled = translationEnabled
             self.translationSubtitles = translationSubtitles
+            self.sgThermalBadge = sgThermalBadge
+            self.sgReduceVideoEffects = sgReduceVideoEffects
         }
         
         public static func ==(lhs: State, rhs: State) -> Bool {
@@ -186,6 +218,12 @@ public final class PrivateCallScreen: OverlayMaskContainerView, AVPictureInPictu
             if lhs.translationSubtitles != rhs.translationSubtitles {
                 return false
             }
+            if lhs.sgThermalBadge != rhs.sgThermalBadge {
+                return false
+            }
+            if lhs.sgReduceVideoEffects != rhs.sgReduceVideoEffects {
+                return false
+            }
             return true
         }
     }
@@ -222,6 +260,8 @@ public final class PrivateCallScreen: OverlayMaskContainerView, AVPictureInPictu
     
     private var statusView: StatusView
     private var weakSignalView: WeakSignalView?
+    // MARK: Swiftgram
+    private var sgThermalBadgeView: SGThermalBadgeView?
     
     private var emojiView: KeyEmojiView?
     private var emojiTooltipView: EmojiTooltipView?
@@ -1112,6 +1152,8 @@ public final class PrivateCallScreen: OverlayMaskContainerView, AVPictureInPictu
             videoContainerTransition.setBounds(layer: videoContainerView.blurredContainerLayer, bounds: CGRect(origin: CGPoint(), size: expandedVideoFrame.size))
             videoContainerTransition.setScale(layer: videoContainerView.blurredContainerLayer, scale: 1.0)
             videoContainerView.update(size: expandedVideoFrame.size, insets: minimizedVideoInsets, interfaceOrientation: params.interfaceOrientation, cornerRadius: params.screenCornerRadius, controlsHidden: currentAreControlsHidden, isMinimized: i != 0, isAnimatedOut: false, transition: videoContainerTransition)
+            // MARK: Swiftgram
+            videoContainerView.sgBlurHidden = params.state.sgReduceVideoEffects && currentAreControlsHidden
             
             let alphaTransition: ComponentTransition
             switch transition.animation {
@@ -1565,5 +1607,57 @@ public final class PrivateCallScreen: OverlayMaskContainerView, AVPictureInPictu
                 })
             }
         }
+
+        // MARK: Swiftgram
+        self.sgUpdateThermalBadge(params: params, currentAreControlsHidden: currentAreControlsHidden, transition: transition)
+    }
+
+    // MARK: Swiftgram
+    /// Top-right while the controls are visible (level with the back button,
+    /// left of the conference button, above the minimised video tile at
+    /// insets.top + 60). Top-left while they are hidden, because the minimised
+    /// tile then moves up into the top-right corner and the back button is gone.
+    private func sgUpdateThermalBadge(params: Params, currentAreControlsHidden: Bool, transition: ComponentTransition) {
+        guard let badge = params.state.sgThermalBadge, badge.statusText != nil || badge.throttleText != nil else {
+            if let badgeView = self.sgThermalBadgeView {
+                self.sgThermalBadgeView = nil
+                transition.setAlpha(view: badgeView, alpha: 0.0, completion: { [weak badgeView] _ in
+                    badgeView?.removeFromSuperview()
+                })
+            }
+            return
+        }
+
+        let badgeView: SGThermalBadgeView
+        var isNew = false
+        if let current = self.sgThermalBadgeView {
+            badgeView = current
+        } else {
+            badgeView = SGThermalBadgeView()
+            self.sgThermalBadgeView = badgeView
+            self.addSubview(badgeView)
+            isNew = true
+        }
+
+        let reservedRight: CGFloat = params.state.isConferencePossible ? 40.0 + 8.0 : 0.0
+        let constrainedWidth = min(240.0, params.size.width - params.insets.left - params.insets.right - 20.0 - reservedRight)
+        let badgeSize = badgeView.update(badge: badge, constrainedWidth: constrainedWidth)
+
+        let badgeFrame: CGRect
+        if currentAreControlsHidden {
+            badgeFrame = CGRect(origin: CGPoint(x: params.insets.left + 10.0, y: params.insets.top + 2.0), size: badgeSize)
+        } else {
+            badgeFrame = CGRect(origin: CGPoint(x: params.size.width - params.insets.right - 10.0 - reservedRight - badgeSize.width, y: params.insets.top + 12.0), size: badgeSize)
+        }
+
+        if isNew {
+            badgeView.frame = badgeFrame
+            if !transition.animation.isImmediate {
+                badgeView.alpha = 0.0
+            }
+        } else {
+            transition.setFrame(view: badgeView, frame: badgeFrame)
+        }
+        transition.setAlpha(view: badgeView, alpha: self.isAnimatedOutToGroupCall ? 0.0 : 1.0)
     }
 }

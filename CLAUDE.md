@@ -24,7 +24,7 @@ init file, so the fetch fails. Real profiles are committed instead:
 
 | Path | Profiles | Use |
 | --- | --- | --- |
-| `build-system/fake-codesigning` | 9 × App Store distribution | simulator builds, TestFlight |
+| `build-system/fake-codesigning` | 9 × App Store distribution | simulator builds, TestFlight |
 | `build-system/fake-codesigning-dev` | 9 × development (device-scoped) | direct install on a tethered device |
 
 Bazel is not on `PATH`; Make.py drives `build-input/bazel-8.4.2-darwin-arm64`.
@@ -607,11 +607,60 @@ It exists because the subtitle blend belongs in the capture path, and the
 to — editing in place would pin the submodule to a commit that exists on one
 machine only and break a fresh clone.
 
-The copy is upstream byte-for-byte apart from ~26 lines marked `MARK:
-Swiftgram`. **After a tgcalls update:** re-copy the upstream file, re-apply
-`Swiftgram/patches/tgcalls-subtitle-burn-in.patch`, and update the commit SHA in
-the banner at the top. `platform/darwin` is on the include path so the copy's
-quoted includes resolve unchanged.
+There are two vendored files now: `VideoCameraCapturer.mm` and
+`DarwinInterface.mm`, both in `submodules/TgVoipWebrtc/Sources/` and both
+excluded in **both** `sources` globs of that BUILD file. Each is upstream apart
+from blocks marked `MARK: Swiftgram`. **After a tgcalls update:** re-copy the
+upstream files, apply `Swiftgram/patches/tgcalls-subtitle-burn-in.patch` and then
+`Swiftgram/patches/tgcalls-call-video-limits.patch` from the `tgcalls/tgcalls`
+directory with `patch -p1`, put the banners back, and update the commit SHA in
+them. The patches exclude the banners. `platform/darwin` is on the include path,
+so the copies' quoted includes resolve unchanged.
+
+## Cooler video calls
+
+Swiftgram Settings ▸ Video Call Heat caps the outgoing camera video to keep a
+phone cool on long calls. It exists for a tester whose phone overheats in a hot
+climate. Stock Telegram captures at 720p/30 and allows 1 Mbit/s, and none of the
+existing knobs (`dataSaving`, `preferredVideoCodec`, `enableHighBitrateVideo`)
+do anything on V2 calls.
+
+| Piece | Where |
+|---|---|
+| Settings | `SGSimpleSettings` `callVideo*`, `callThermalAutoThrottle`, `callDimScreen`, `callReduceVideoEffects`, `callShowThermalStatus` |
+| Governor, thermal readings, logging | `Swiftgram/SGCallThermal` (`SGCallThermalMonitor`), started and stopped by `PresentationCallImpl` |
+| Native limit store | `SGCallVideoLimits` (`TgVoipWebrtc`), set via `OngoingCallContext.setSwiftgramVideoLimits` |
+| Capture format, fps lock, I420 downscale | vendored `VideoCameraCapturer.mm` |
+| Adapter clamp, encoder bitrate cap | vendored `DarwinInterface.mm` |
+| Badge, throttle line, blur skip | `PrivateCallScreen` + `SGThermalBadgeView`, fed by `CallControllerNodeV2` |
+
+Things to know:
+
+- **The bitrate cap is an encoder wrapper.** tgcalls has no hook for it.
+  `InstanceV2Impl` hard-codes 1000 kbit/s. `SGLimitingVideoEncoder` scales each
+  `SetRates` down instead. Every instance version gets its encoders from
+  `DarwinInterface`, so this one wrapper covers all of them.
+- **Limits change live.** The capturer compares `SGCallVideoLimits.generation`
+  once per frame and reconfigures the camera when it moves. The encoder
+  re-applies its last rates on the next `Encode`.
+- **Auto-throttle ladder.** At Serious the video goes to 480p/15/400k, and at
+  Critical to 360p/12/250k. Each is combined per field with the user's settings.
+  The throttle steps down at once but only relaxes after the cooler level has
+  held for 60s.
+- **Temperature in °C is private API.** The badge shows
+  `ProcessInfo.thermalState`, which is the only public signal. It also tries
+  `AppleSmartBattery`'s `Temperature` through IOKit, loaded with `dlsym`. The
+  probe logs its outcome once per process and gives up on the first failure,
+  because the sandbox likely blocks it. Run `altool --validate-app` before
+  shipping it to TestFlight.
+- **Logs.** Look for `[SGThermal]` lines. There is one every 30s during a call
+  and one on every level, charging or throttle change, each with the level, °C
+  or `n/a`, battery, and the applied limits. The native side writes
+  `[SGCallVideoLimits]` lines to NSLog for the chosen capture format and
+  encoder clamping.
+- **Testing needs a device.** The simulator camera is a synthetic buffer.
+  Xcode ▸ Devices and Simulators ▸ Device Conditions ▸ Thermal State forces
+  Serious or Critical on a tethered phone.
 
 ## tgcalls Testbench
 

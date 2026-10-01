@@ -1,0 +1,17 @@
+Build 17 — cooler video calls
+
+New: Swiftgram Settings > Video Call Heat. Lower these to make the phone run cooler on long video calls, at the cost of picture quality:
+- Camera Resolution: 720p (default), 540p, 480p, 360p
+- Frame Rate: 30 fps (default) down to 12 fps
+- Video Bitrate: 1 Mbps (default) down to 250 kbps
+The coolest setup is 360p, 12–15 fps, 250–350 kbps. Changes apply during a call within about 5 seconds.
+
+New: Lower Quality When Hot (on by default). When iOS says the phone is hot, the video steps down on its own, to 480p / 15 fps / 400 kbps, then to 360p / 12 fps / 250 kbps. It goes back up after the phone has stayed cooler for a minute. While this is active, the call screen shows "Throttled" with the current limits.
+
+New: phone temperature on the call screen, top corner. It shows the iOS heat level (Nominal / Fair / Serious / Critical, green to red), battery %, and a lightning bolt when charging. It shows °C only if iOS allows reading it, which it probably does not. Turn it off with Show Phone Temperature.
+
+New: Dim Screen (Off / When Hot / Always) lowers brightness during video calls, and restores it afterwards. Reduce Call Screen Effects turns off some video processing on the call screen.
+
+Tips: charging during a call and a phone case both add a lot of heat.
+
+Please check: after a long call, send the app logs. They include a heat reading every 30 seconds. Also check whether the throttled video is still acceptable, and whether the badge covers anything important.

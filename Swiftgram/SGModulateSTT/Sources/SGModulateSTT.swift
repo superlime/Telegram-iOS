@@ -201,6 +201,8 @@ public final class SGModulateSTTSession {
     public var onFinished: (() -> Void)?
     /// Every JSON message as received, for the harness. Not used by the app.
     public var onRawMessage: ((String) -> Void)?
+    /// Notable internal decisions, for logging only.
+    public var onDiagnostic: ((String) -> Void)?
 
     /// The socket audio is currently written to.
     private var live: SGModulateSocket?
@@ -216,6 +218,9 @@ public final class SGModulateSTTSession {
     private let languageHint: String?
     /// Ends the live socket after `idleTimeout` without audio.
     private var idleTimer: SwiftSignalKit.Timer?
+    /// Ends the live socket when an unfinished utterance has had no new
+    /// partial for `partialStallTimeout`. See that constant.
+    private var partialStallTimer: SwiftSignalKit.Timer?
     /// How many sockets this session has opened. Exposed for the harness.
     public private(set) var connectionCount: Int = 0
 
@@ -296,6 +301,7 @@ public final class SGModulateSTTSession {
             }
             self.idleTimer?.invalidate()
             self.idleTimer = nil
+            self.cancelPartialStallTimer()
             guard let socket = self.live else {
                 // Nothing in flight; nothing to drain.
                 self.teardown()
@@ -317,6 +323,7 @@ public final class SGModulateSTTSession {
         self.isDraining = false
         self.idleTimer?.invalidate()
         self.idleTimer = nil
+        self.cancelPartialStallTimer()
         self.live?.cancel()
         self.live = nil
         self.ending?.cancel()
@@ -395,6 +402,7 @@ public final class SGModulateSTTSession {
             self.live = nil
             self.idleTimer?.invalidate()
             self.idleTimer = nil
+            self.cancelPartialStallTimer()
         }
         if self.ending === socket {
             self.ending = nil
@@ -444,6 +452,29 @@ public final class SGModulateSTTSession {
         self.endGracefully(socket)
     }
 
+    private func cancelPartialStallTimer() {
+        self.partialStallTimer?.invalidate()
+        self.partialStallTimer = nil
+    }
+
+    /// (Re)start the stall countdown for the unfinished utterance on `socket`.
+    private func armPartialStallTimer(_ socket: SGModulateSocket) {
+        self.partialStallTimer?.invalidate()
+        let timer = SwiftSignalKit.Timer(timeout: SGModulateSTTConfig.partialStallTimeout, repeat: false, completion: { [weak self, weak socket] in
+            guard let self = self, let socket = socket else {
+                return
+            }
+            self.partialStallTimer = nil
+            guard self.live === socket, !self.isDraining, !self.isFinished else {
+                return
+            }
+            self.onDiagnostic?("No new partial for \(SGModulateSTTConfig.partialStallTimeout)s with an utterance unfinished; ending the stream to flush it.")
+            self.endGracefully(socket)
+        }, queue: sgModulateQueue)
+        self.partialStallTimer = timer
+        timer.start()
+    }
+
     /// Stop writing to `socket` but keep reading it: send end-of-stream so the
     /// server flushes whatever it still holds, then drop it on "done" or, if
     /// that never comes, after the drain timeout. Audio spoken from now on
@@ -454,6 +485,7 @@ public final class SGModulateSTTSession {
         }
         self.idleTimer?.invalidate()
         self.idleTimer = nil
+        self.cancelPartialStallTimer()
         self.ending?.cancel()
         self.ending = socket
         self.live = nil
@@ -525,6 +557,10 @@ public final class SGModulateSTTSession {
                 accent: sgModulateStringValue(payload["accent"]),
                 recognitionLatency: latency
             )
+            // Final received: nothing is left pending on this socket.
+            if self.live === socket {
+                self.cancelPartialStallTimer()
+            }
             guard !utterance.text.isEmpty else {
                 return
             }
@@ -552,6 +588,9 @@ public final class SGModulateSTTSession {
             let text = (payload["text"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             guard !text.isEmpty else {
                 return
+            }
+            if self.live === socket {
+                self.armPartialStallTimer(socket)
             }
             self.onPartialUtterance?(SGModulatePartialUtterance(
                 text: text,

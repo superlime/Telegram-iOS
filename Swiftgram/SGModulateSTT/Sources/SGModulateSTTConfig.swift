@@ -65,6 +65,18 @@ public enum SGModulateSTTConfig {
     /// why the limit is as short as a single breathless sentence allows.
     public static let unansweredAudioLimitMs: Double = 20_000.0
 
+    /// Seconds without a new partial, while an utterance is still unfinished,
+    /// before the socket is sent end-of-stream to force the final out.
+    ///
+    /// The server decides on its own when an utterance is over, from the audio
+    /// it is sent. Once the speech gate shuts it is sent nothing, and testers
+    /// saw a finished sentence sit unfinalised through a long pause until the
+    /// next word pushed it out. The protocol guarantees the pending utterance
+    /// is emitted after end-of-stream, so a stalled partial is ended that way.
+    /// Partials arrive continuously while someone is talking, so this only
+    /// fires in a pause; the next word opens a fresh socket (~1 s).
+    public static let partialStallTimeout: Double = 2.0
+
     // MARK: Audio front-end
 
     /// Milliseconds of audio per WebSocket frame. 100 ms balances latency

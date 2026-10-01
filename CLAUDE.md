@@ -584,6 +584,15 @@ Things that will bite you:
   dies *silently*: sends keep succeeding, the receive never fails. That was
   the "translation stops after a while" bug. Stream offsets (`start_ms`) are
   per connection, so the wall-clock ledger lives on the socket object.
+- **A stalled partial forces end-of-stream.** The server decides on its own
+  when an utterance is final, and once the speech gate shuts it receives no
+  more audio. Testers saw a finished sentence hang until their next word. Now,
+  when 2 s (`partialStallTimeout`) pass with no new partial and no final, the
+  live socket is sent end-of-stream. The server then must emit the pending
+  utterance, and the next word opens a new socket. In the harness, stopping
+  the audio at the end of speech reproduces the hang with the old code, and the
+  fix delivers the final about 2.6 s after speech. A tail of synthetic room
+  tone does *not* reproduce it.
 - **Partials have no uuid.** `partial_utterance` carries only `start_ms`,
   which is constant for the segment and equals the final utterance's
   `start_ms`; the first partial or two may have it nil. The session keys

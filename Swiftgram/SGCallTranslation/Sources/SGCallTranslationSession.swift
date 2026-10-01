@@ -276,6 +276,11 @@ public final class SGCallTranslationSession {
                 }
             }
         }
+        session.onDiagnostic = { [weak self] message in
+            self?.queue.async {
+                self?.onTransientError?(message)
+            }
+        }
         session.start()
 
         let frontEnd = SGModulateAudioFrontEnd()

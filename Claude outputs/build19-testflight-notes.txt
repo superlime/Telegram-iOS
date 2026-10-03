@@ -1,0 +1,11 @@
+Build 19 - notification fix
+
+Fixed: extra notifications that only said "You have a new message", with no sender. They appeared when you read a chat on another device, when a message was deleted, or when a muted chat got a message. Telegram sends a hidden update in those cases and the app is supposed to hide it. iOS only lets an app do that with a special permission from Apple, which Limegram does not have yet. The app now replaces each of these with a silent blank entry and removes it straight away.
+
+Side effect: a blank entry can show for a moment in Notification Centre before it disappears.
+
+Calls: if the phone cannot show the normal incoming call screen while the app is closed, you now get a regular "is calling you" notification instead of nothing.
+
+Also in this build, everything from build 18: the call translation fix for sentences left waiting after a pause.
+
+Please check: with the phone locked, read a chat on another device. No "You have a new message" should appear, and real messages still arrive with the sender and the text.

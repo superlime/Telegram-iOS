@@ -1,4 +1,5 @@
 load("@build_bazel_rules_swift//swift:swift.bzl", "swift_library")
+load("@build_configuration//:variables.bzl", "telegram_notification_filtering_entitled")
 
 sgdeps = [
     "//Swiftgram/SGAppGroupIdentifier:SGAppGroupIdentifier"
@@ -10,6 +11,8 @@ swift_library(
     srcs = glob([
         "Sources/*.swift",
     ]),
+    # Set when the extension's provisioning profile grants com.apple.developer.usernotifications.filtering.
+    copts = ["-DNOTIFICATION_FILTERING_ENTITLED"] if telegram_notification_filtering_entitled else [],
     deps = sgdeps + [
         "//submodules/Postbox:Postbox",
         "//submodules/TelegramCore:TelegramCore",

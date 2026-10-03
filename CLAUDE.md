@@ -167,6 +167,28 @@ things like CarPlay Messaging per-app-id and forks do not inherit them.
 Open follow-up: `MinimumOSVersion` is 13.0. From Spring 2027 App Store Connect
 rejects uploads below iOS 15.0 (altool warning 90068).
 
+### Notification filtering entitlement (bare "You have a new message" pushes)
+
+Telegram sends every push with a generic outer alert (`PUSH_ENCRYPTED_MESSAGE`). The
+notification service extension suppresses housekeeping pushes (read elsewhere, deleted,
+muted, already displayed) by returning empty content, which iOS honours only when the
+extension is signed with `com.apple.developer.usernotifications.filtering`. Limegram's
+profiles lack it, so without a workaround each of those pushes shows up as a senderless
+"You have a new message".
+
+Make.py reads the NotificationService profile and writes
+`telegram_notification_filtering_entitled` to `variables.bzl`; when it is False,
+`NotificationService.swift` posts a passive placeholder (thread `empty-notification`) and
+deletes it, and shows a plain "is calling you" notification when the CallKit report fails
+(that API needs the same entitlement). Do not use the Debug toggle "[OLD] Fix empty
+notifications" for this: it also disables CallKit.
+
+To drop the workaround: request the entitlement from Apple as Account Holder
+(https://developer.apple.com/contact/request/notification-service), enable it on the
+`org.ccc38e857449d6e8.Limegram.NotificationService` App ID, and regenerate the
+NotificationService profile in both `fake-codesigning` and `fake-codesigning-dev`. No BUILD
+change is needed; the next Make.py run prints `NSE notification filtering entitlement: True`.
+
 ## Translation backends
 
 Message translation routes through a user-selectable service, chosen in Swiftgram

@@ -38,7 +38,7 @@ class BuildConfiguration:
         self.enable_siri = enable_siri
         self.enable_icloud = enable_icloud
 
-    def write_to_variables_file(self, bazel_path, use_xcode_managed_codesigning, aps_environment, path):
+    def write_to_variables_file(self, bazel_path, use_xcode_managed_codesigning, aps_environment, path, notification_filtering_entitled=False):
         string = ''
         string += 'telegram_bazel_path = "{}"\n'.format(bazel_path)
         string += 'telegram_use_xcode_managed_codesigning = {}\n'.format('True' if use_xcode_managed_codesigning else 'False')
@@ -54,6 +54,7 @@ class BuildConfiguration:
         string += 'telegram_app_specific_url_scheme = "{}"\n'.format(self.app_specific_url_scheme)
         string += 'telegram_premium_iap_product_id = "{}"\n'.format(self.premium_iap_product_id)
         string += 'telegram_aps_environment = "{}"\n'.format(aps_environment)
+        string += 'telegram_notification_filtering_entitled = {}\n'.format('True' if notification_filtering_entitled else 'False')
         string += 'telegram_enable_siri = {}\n'.format(self.enable_siri)
         string += 'telegram_enable_icloud = {}\n'.format(self.enable_icloud)
         string += 'telegram_enable_watch = True\n'
@@ -228,6 +229,25 @@ def resolve_aps_environment_from_directory(source_path, team_id, bundle_id):
                         sys.exit(1)
                     return profile_dict['Entitlements']['aps-environment']
     return None
+
+
+def provisioning_profile_grants_entitlement(profile_path, entitlement):
+    if not os.path.isfile(profile_path):
+        return False
+
+    try:
+        profile_data = run_executable_with_output('openssl', arguments=[
+            'smime',
+            '-inform',
+            'der',
+            '-verify',
+            '-noverify',
+            '-in',
+            profile_path
+        ], decode=False, stderr_to_stdout=False, check_result=False)
+        return plistlib.loads(profile_data).get('Entitlements', {}).get(entitlement) == True
+    except Exception:
+        return False
 
 
 def copy_certificates_from_directory(source_path, destination_path):

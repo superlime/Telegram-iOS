@@ -12,7 +12,7 @@ import glob
 from BuildEnvironment import resolve_executable, call_executable, run_executable_with_output, BuildEnvironmentVersions, BuildEnvironment
 from ProjectGeneration import generate
 from BazelLocation import locate_bazel
-from BuildConfiguration import CodesigningSource, GitCodesigningSource, DirectoryCodesigningSource, XcodeManagedCodesigningSource, BuildConfiguration, build_configuration_from_json
+from BuildConfiguration import CodesigningSource, GitCodesigningSource, DirectoryCodesigningSource, XcodeManagedCodesigningSource, BuildConfiguration, build_configuration_from_json, provisioning_profile_grants_entitlement
 import RemoteBuild
 import TartBuild
 import GenerateProfiles
@@ -521,8 +521,16 @@ def resolve_configuration(base_path, bazel_command_line: BazelCommandLine, argum
         print('Could not find a valid aps-environment entitlement in the provided provisioning profiles')
         sys.exit(1)
 
+    # The notification service extension is signed with the entitlements of its profile, so
+    # the profile decides whether it can suppress notifications natively.
+    notification_filtering_entitled = provisioning_profile_grants_entitlement(
+        provisioning_path + '/NotificationService.mobileprovision',
+        'com.apple.developer.usernotifications.filtering'
+    )
+    print('TelegramBuild: NSE notification filtering entitlement: {}'.format(notification_filtering_entitled))
+
     if bazel_command_line is not None:
-        build_configuration.write_to_variables_file(bazel_path=bazel_command_line.bazel, use_xcode_managed_codesigning=codesigning_data.use_xcode_managed_codesigning, aps_environment=codesigning_data.aps_environment, path=configuration_repository_path + '/variables.bzl')
+        build_configuration.write_to_variables_file(bazel_path=bazel_command_line.bazel, use_xcode_managed_codesigning=codesigning_data.use_xcode_managed_codesigning, aps_environment=codesigning_data.aps_environment, path=configuration_repository_path + '/variables.bzl', notification_filtering_entitled=notification_filtering_entitled)
 
     provisioning_profile_files = []
     for file_name in os.listdir(provisioning_path):

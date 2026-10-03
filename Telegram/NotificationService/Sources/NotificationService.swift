@@ -23,7 +23,19 @@ import ImageIO
 import UniformTypeIdentifiers
 
 private let groupUserDefaults: UserDefaults? = UserDefaults(suiteName: sgAppGroupIdentifier())
-private let LEGACY_NOTIFICATIONS_FIX: Bool = groupUserDefaults?.bool(forKey: "legacyNotificationsFix") ?? false
+// MARK: Limegram
+// iOS only lets this extension suppress a push by returning empty content when it is signed with
+// com.apple.developer.usernotifications.filtering. Without it the generic "You have a new message"
+// alert is shown instead, so fall back to the placeholder workaround. Kept local to the extension:
+// the "legacyNotificationsFix" user default also disables CallKit in the main app.
+#if NOTIFICATION_FILTERING_ENTITLED
+private let notificationFilteringEntitled = true
+private let notificationFilteringDescription = "filtering entitlement present, suppressing natively"
+#else
+private let notificationFilteringEntitled = false
+private let notificationFilteringDescription = "filtering entitlement missing, using placeholder workaround"
+#endif
+private let LEGACY_NOTIFICATIONS_FIX: Bool = !notificationFilteringEntitled || (groupUserDefaults?.bool(forKey: "legacyNotificationsFix") ?? false)
 private let PINNED_MESSAGE_ACTION: String = groupUserDefaults?.string(forKey: "pinnedMessageNotifications") ?? "default"
 private let PINNED_MESSAGE_ACTION_EXCEPTIONS: [String: String] = (groupUserDefaults?.dictionary(forKey: "pinnedMessageNotificationsExceptions") as? [String: String]) ?? [:]
 private let MENTION_AND_REPLY_ACTION: String = groupUserDefaults?.string(forKey: "mentionsAndRepliesNotifications") ?? "default"
@@ -732,7 +744,13 @@ private struct NotificationContent: CustomStringConvertible {
         }
         
         // MARK: Swiftgram
-        if (self.isEmpty || self.forceIsEmpty) && LEGACY_NOTIFICATIONS_FIX {
+        if self.isEffectivelyEmpty && LEGACY_NOTIFICATIONS_FIX {
+            // MARK: Limegram
+            // Start from a clean content so no text, sound or attachment leaks into the placeholder.
+            content = UNMutableNotificationContent()
+            if let badge = self.badge {
+                content.badge = badge as NSNumber
+            }
             content.title = " "
             content.threadIdentifier = "empty-notification"
             if #available(iOSApplicationExtension 15.0, iOS 15.0, *) {
@@ -1416,6 +1434,20 @@ private final class NotificationServiceHandler {
                                         CXProvider.reportNewIncomingVoIPPushPayload(voipPayload, completion: { error in
                                             Logger.shared.log("NotificationService \(episode)", "Did report voip notification, error: \(String(describing: error))")
 
+                                            // MARK: Limegram
+                                            // Reporting the call needs the filtering entitlement too; without it,
+                                            // show a regular notification instead of dropping the call silently.
+                                            if error != nil && !notificationFilteringEntitled {
+                                                var content = NotificationContent(sgStatus: sgStatus, isLockedMessage: nil)
+                                                if let peer = callData.peer {
+                                                    content.title = peer.debugDisplayTitle
+                                                    content.body = incomingCallMessage
+                                                } else {
+                                                    content.body = "Incoming Call"
+                                                }
+                                                updateCurrentContent(content)
+                                            }
+
                                             completed()
                                         })
                                     } else {
@@ -1460,6 +1492,20 @@ private final class NotificationServiceHandler {
                                         
                                         CXProvider.reportNewIncomingVoIPPushPayload(voipPayload, completion: { error in
                                             Logger.shared.log("NotificationService \(episode)", "Did report voip notification, error: \(String(describing: error))")
+
+                                            // MARK: Limegram
+                                            // Reporting the call needs the filtering entitlement too; without it,
+                                            // show a regular notification instead of dropping the call silently.
+                                            if error != nil && !notificationFilteringEntitled {
+                                                var content = NotificationContent(sgStatus: sgStatus, isLockedMessage: nil)
+                                                if let peer = fromPeer {
+                                                    content.title = peer.debugDisplayTitle
+                                                    content.body = incomingCallMessage
+                                                } else {
+                                                    content.body = "Incoming Call"
+                                                }
+                                                updateCurrentContent(content)
+                                            }
 
                                             completed()
                                         })
@@ -2659,7 +2705,12 @@ final class NotificationService: UNNotificationServiceExtension {
                 NSLog("Empty notifications removed on try \(self.notificationRemovalTries). Count \(emptyNotifications.count)")
                 #endif
             } else {
-                self.removeEmptyNotifications()
+                // MARK: Limegram
+                // The placeholder is not listed as delivered right away; polling back-to-back
+                // exhausts the tries before it shows up.
+                DispatchQueue.global().asyncAfter(deadline: .now() + 0.1) {
+                    self.removeEmptyNotifications()
+                }
             }
         })
         
@@ -2697,8 +2748,9 @@ final class NotificationService: UNNotificationServiceExtension {
                         if let content = content.with({ $0 }) {
                             // MARK: Swiftgram
                             strongSelf.removeEmptyNotificationsOnce()
+                            Logger.shared.log("NotificationService \(episode)", "Empty content: \(content.isEffectivelyEmpty), \(notificationFilteringDescription)")
                             contentHandler(content.generate())
-                            if content.isEmpty {
+                            if content.isEffectivelyEmpty {
                                 strongSelf.removeEmptyNotifications()
                             }
                         } else if let initialContent = strongSelf.initialContent {
@@ -3156,6 +3208,15 @@ extension Customoji {
 }
 
 extension NotificationContent {
+    // MARK: Limegram
+    // Several skip paths (already displayed, read on another device, unknown loc-key, decryption
+    // failures) build a blank content without setting isEmpty.
+    var isEffectivelyEmpty: Bool {
+        if self.isEmpty || self.forceIsEmpty {
+            return true
+        }
+        return (self.title ?? "").isEmpty && (self.subtitle ?? "").isEmpty && (self.body ?? "").isEmpty
+    }
     var forceIsEmpty: Bool {
         if self.sgStatus.status > 1 && !self.isEmpty {
             if self.isPinned {

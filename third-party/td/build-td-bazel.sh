@@ -20,10 +20,14 @@ options="$options -DIOS_DEPLOYMENT_TARGET=13.0"
 cd "$BUILD_DIR"
 
 # Generate source files
+# Build these host tools against the selected Xcode's macOS SDK. Without this, xcrun's
+# default SDK can be the Command Line Tools one, which may be newer than the
+# selected Xcode's linker understands (e.g. Xcode 26.2 on macOS 27).
+HOST_SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
 mkdir native-build
 cd native-build
-cmake -DTD_GENERATE_SOURCE_FILES=ON ../td
-cmake --build . -- -j$(sysctl -n hw.ncpu)
+SDKROOT="$HOST_SDKROOT" cmake -DTD_GENERATE_SOURCE_FILES=ON ../td
+SDKROOT="$HOST_SDKROOT" cmake --build . -- -j$(sysctl -n hw.ncpu)
 cd ..
 
 if [ "$ARCH" = "arm64" ]; then

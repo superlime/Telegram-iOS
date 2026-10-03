@@ -18,6 +18,11 @@ set -x
     mkdir -p "$$CMAKE_DIR"
     tar -xf "$(location @cmake_tar_gz//file)" -C "$$CMAKE_DIR"
     
+    # Build host tools against the selected Xcode's macOS SDK. Without this, xcrun's
+    # default SDK can be the Command Line Tools one, which may be newer than the
+    # selected Xcode's linker understands (e.g. Xcode 26.2 on macOS 27).
+    export SDKROOT="$$(xcrun --sdk macosx --show-sdk-path)"
+
     tar -xzf "$(location @flatbuffers_zip//file)" --directory "$$BUILD_DIR"
     pushd "$$BUILD_DIR/flatbuffers-24.12.23"
     mkdir build

@@ -36,6 +36,11 @@ set -x
         exit 1
     fi
 
+    # Build host tools against the selected Xcode's macOS SDK. Without this, xcrun's
+    # default SDK can be the Command Line Tools one, which may be newer than the
+    # selected Xcode's linker understands (e.g. Xcode 26.2 on macOS 27).
+    export SDKROOT="$$(xcrun --sdk macosx --show-sdk-path)"
+
     SOURCE_PATH="third-party/yasm/yasm-1.3.0"
     cp -R "$$SOURCE_PATH" "$$BUILD_DIR/"
 
